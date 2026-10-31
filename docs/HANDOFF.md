@@ -55,7 +55,7 @@ GitHub Actions（本仓库）
 | `analysis/match_fd.py` | 用体彩 teamId + 同日期同比分的共现次数自动生成队名对照 `data/mappings/team_alias_fd.csv`（status=review 的要人工看），再逐场匹配。2018 年 1771 场匹配 1766 场，比分全一致；没配上的是升降级附加赛 |
 | `analysis/step2_pinnacle.py` | 第 2 步报告：抽水对比、体彩 vs Pinnacle 准确度（Shin 去水）、按 Pinnacle 概率算体彩 EV 的价值检验 → `reports/step2_pinnacle.md` |
 | `analysis/step3_history.py` | 第 3 步报告（变赔历史 1.4 万场）：让球泊松模型验证、胜平负 vs 让球 EV 对比、开盘/上午/停售三个时点的回报和 CLV → `reports/step3_history.md` |
-| `analysis/daily.py` | 每日推荐：最新体彩在售快照 × 最新 Odds API 快照（相差 ≤90 分钟、不超过 2 小时）→ 联赛+开球时间+英文名相似度匹配（中文队→英文名来自 `team_alias_fd.csv`，匹配成功的写进 `team_alias_oddsapi.csv`）→ Pinnacle Shin 去水 → EV。正式：HAD、EV≥5%、SP≤6，可单关出单关，否则满两个组 2串1；无正式时出娱乐 2/3/4 串 1（EV≥-8%、SP 1.3–4.0）。每注 2 元、日上限 10 元，每条腿给底线 SP。让球用泊松模型推算，只做影子。输出 `recommendations/YYYY-MM-DD.{json,md,sha256}`，已存在不覆盖。首测 36/36 场匹配正确 |
+| `analysis/daily.py` | 每日推荐：最新体彩在售快照 × 最新 Odds API 快照（相差 ≤90 分钟、不超过 2 小时）→ 联赛+开球时间+英文名相似度匹配（中文队→英文名来自 `team_alias_fd.csv`，匹配成功的写进 `team_alias_oddsapi.csv`）→ Pinnacle Shin 去水 → EV。胜平负和让球都参与（让球泊松模型第 3 步验证通过）。正式（未验证）：EV≥5%、SP≤6，可单关出单关，否则组 2串1，最多两张。娱乐串关每天都出：每场取 SP 1.5–3.0、EV≥-8% 里 EV 最高的一项，按 EV 排序取前 n 场组 2/3/4/6/8 串 1（用户 2026-10-31 要求，8 串 1 用稳腿）。每注 2 元、日上限 10 元，超预算时先保留大串。每条腿给底线 SP。输出 `recommendations/YYYY-MM-DD.{json,md,sha256}`，已存在不覆盖。首测 36/36 场匹配正确 |
 | `analysis/settle.py` | 赛后结算 → `reports/ledger.md`：推荐票账本、CLV（推荐 SP 对停售终赔）、影子账本（所有 EV≥0 的 HAD 选项各 1 元） |
 | `.github/workflows/daily-picks.yml` | 两个采集工作流完成后触发（不是新定时器）：生成当天推荐 + 结算 |
 | `.github/workflows/analysis.yml` | 采集成功后或手动触发时重新生成 `reports/` 并提交 |

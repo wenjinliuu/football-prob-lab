@@ -4,10 +4,10 @@
 1. 读最新一份体彩在售快照（calc）和最新一份 The Odds API 快照（h2h）。两份抓取时间相差须 ≤ 90 分钟。
 2. 场次匹配：联赛对应 + 开球时间相差 ≤ 3 小时 + 英文队名相似度。
    中文队 → 英文名来自 data/mappings/team_alias_fd.csv（Football-Data 名）和 team_alias_oddsapi.csv（以往匹配成功的记录）。
-3. 概率：胜平负用 Pinnacle 去水（Shin）。让球胜平负用泊松比分模型从胜平负概率反推，目前只做「影子」记录，不进推荐。
+3. 概率：胜平负用 Pinnacle 去水（Shin）。让球胜平负用泊松比分模型从胜平负概率反推（第 3 步验证：不比体彩让球赔率差）。
 4. 选择：
-   - 正式推荐：胜平负、EV ≥ 5%、SP ≤ 6、可单关 → 单关；不可单关的 EV ≥ 5% 选项满两个时组 2 串 1。
-   - 娱乐串关：没有正式推荐时，从不同比赛里挑 EV 最高的选项（EV ≥ −8%、SP 1.3–4.0）组 2/3/4 串 1。
+   - 正式推荐（未验证）：胜平负或让球、EV ≥ 5%、SP ≤ 6；可单关出单关，否则满两个组 2 串 1；最多两张。
+   - 娱乐串关：每天都出。每场取 SP 1.5–3.0、EV ≥ −8% 里 EV 最高的一项，按 EV 排序，前 n 场组 n 串 1（2/3/4/6/8）。
    - 每注 2 元，单日合计 ≤ 10 元。每条腿给出「底线 SP」：下单时低于它就别买。
 5. 冻结：写 recommendations/YYYY-MM-DD.json 和 .md，附 sha256；同一天已存在则不覆盖。
 只做研究和模拟，不接入投注。
@@ -39,9 +39,13 @@ SPORT = {25: "soccer_epl", 62: "soccer_spain_la_liga", 40: "soccer_italy_serie_a
 NAME = {"H": "主胜", "D": "平", "A": "客胜"}
 
 FORMAL_EV, FORMAL_MAX_SP = 0.05, 6.0
-FUN_MIN_EV, FUN_SP = -0.08, (1.3, 4.0)
+# 娱乐串关的腿：SP 1.5–3.0 的稳腿（用户 2026-10-31 确认 8 串 1 也用稳腿），EV ≥ -8%。
+# 每场取 EV 最高的一项，再按 EV 从高到低排：小串只用最好的几场，大串依次往下补。
+# 第 3 步回测：EV -5%~0 的选项实际只亏 1–4%；但每天每场最好的一项中位数约 -7.5%，门槛设 -5% 凑不齐 6/8 串。
+FUN_MIN_EV, FUN_SP = -0.08, (1.5, 3.0)
 STAKE, DAILY_CAP = 2, 10
-FUN_PARLAYS = (2, 3, 4)  # 用户 2026-10-31 要求：多串几场
+FUN_PARLAYS = (2, 3, 4, 6, 8)  # 竞彩胜平负/让球最多 8 串 1；用户 2026-10-31 要求
+FUN_PRIORITY = (8, 6, 4, 3, 2)  # 预算不够时先保留大串（用户想要偶尔中个大的）
 
 
 # ---------- 读快照 ----------
@@ -257,7 +261,7 @@ def build(now=None, write_alias=True):
             for j, o in enumerate("HDA"):
                 sp = getattr(r, f"hhad_{o.lower()}")
                 legs.append({**base, "pool": f"让球({int(r.goal_line):+d})", "pick": NAME[o], "sp": sp, "p": float(ph[j]),
-                             "ev": float(ph[j] * sp - 1), "single": bool(r.hhad_single), "shadow": True,
+                             "ev": float(ph[j] * sp - 1), "single": bool(r.hhad_single), "shadow": False,
                              "lambda": [round(lh, 2), round(la, 2)]})
     legs = pd.DataFrame(legs)
     tickets = choose(legs) if len(legs) else []
@@ -287,25 +291,28 @@ def ticket(kind, legs, min_ev):
 
 
 def choose(legs):
-    had = legs[~legs["shadow"]].sort_values("ev", ascending=False)
-    formal = had[(had["ev"] >= FORMAL_EV) & (had["sp"] <= FORMAL_MAX_SP)]
+    """正式推荐（EV ≥ 5%，未验证）+ 娱乐 2/3/4/6/8 串 1。胜平负和让球都参与（让球模型第 3 步验证通过）。"""
+    pool = legs.sort_values("ev", ascending=False)
+    formal = pool[(pool["ev"] >= FORMAL_EV) & (pool["sp"] <= FORMAL_MAX_SP)].drop_duplicates("match_id")
     tickets = []
-    for _, l in formal[formal["single"]].iterrows():
-        tickets.append({**ticket("正式·单关", [l], FORMAL_EV), "tier": "formal"})
-    multi = formal[~formal["single"]].drop_duplicates("match_id")
+    for _, l in formal[formal["single"]].head(2).iterrows():
+        tickets.append({**ticket("正式（未验证）·单关", [l], FORMAL_EV), "tier": "formal"})
+    multi = formal[~formal["single"]]
     if len(multi) >= 2:
-        tickets.append({**ticket("正式·2串1", [multi.iloc[0], multi.iloc[1]], FORMAL_EV), "tier": "formal"})
-    if not tickets:
-        fun = had[(had["ev"] >= FUN_MIN_EV) & had["sp"].between(*FUN_SP)].drop_duplicates("match_id")
-        for n in FUN_PARLAYS:
-            if len(fun) >= n:
-                tickets.append({**ticket(f"娱乐·{n}串1", [fun.iloc[i] for i in range(n)], FUN_MIN_EV), "tier": "fun"})
-    out, spent = [], 0
-    for t in tickets:
-        if spent + t["stake"] <= DAILY_CAP:
-            out.append(t)
-            spent += t["stake"]
-    return out
+        tickets.append({**ticket("正式（未验证）·2串1", [multi.iloc[0], multi.iloc[1]], FORMAL_EV), "tier": "formal"})
+    tickets = tickets[:2]  # 正式票最多两张，给娱乐串关留预算
+
+    fun = pool[(pool["ev"] >= FUN_MIN_EV) & pool["sp"].between(*FUN_SP)]
+    fun = fun.drop_duplicates("match_id")  # pool 已按 EV 降序：每场取 EV 最高的一项，整体也按 EV 排
+    by_n = {n: {**ticket(f"娱乐·{n}串1", [fun.iloc[i] for i in range(n)], FUN_MIN_EV), "tier": "fun"}
+            for n in FUN_PARLAYS if len(fun) >= n}
+    spent = sum(t["stake"] for t in tickets)
+    keep = []
+    for n in FUN_PRIORITY:
+        if n in by_n and spent + STAKE <= DAILY_CAP:
+            keep.append(n)
+            spent += STAKE
+    return tickets + [by_n[n] for n in sorted(keep)]
 
 
 def to_markdown(rec):
@@ -326,11 +333,12 @@ def to_markdown(rec):
         L.append(f"今日合计 {total} 元。\n\n")
     legs = pd.DataFrame(rec["legs"])
     if len(legs):
-        top = legs[~legs["shadow"]].sort_values("ev", ascending=False).head(8)
-        L.append("## 期望回报最高的胜平负选项\n\n| 场次 | 比赛 | 选项 | SP | 市场概率 | 期望回报 | 可单关 |\n| --- | --- | --- | --- | --- | --- | --- |\n")
+        top = legs.sort_values("ev", ascending=False).head(8)
+        L.append("## 期望回报最高的选项\n\n| 场次 | 比赛 | 玩法 | 选项 | SP | 市场概率 | 期望回报 | 可单关 |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n")
         for l in top.itertuples():
-            L.append(f"| {l.num} | {l.home} vs {l.away} | {l.pick} | {l.sp:.2f} | {l.p:.1%} | {l.ev:+.1%} | {'是' if l.single else '否'} |\n")
-        L.append("\n> 让球胜平负的概率由比分模型推算，目前只做影子记录，不进推荐。\n")
+            L.append(f"| {l.num} | {l.home} vs {l.away} | {l.pool} | {l.pick} | {l.sp:.2f} | {l.p:.1%} | {l.ev:+.1%} | {'是' if l.single else '否'} |\n")
+        L.append("\n> 「正式（未验证）」：按国际市场算期望回报 ≥ 5%，历史回测还不能证明真能赚，等实盘记账检验。"
+                 "娱乐串关每腿是赔率 1.5–3 的稳腿、按期望回报从高到低取，长期仍是小亏，图个乐。让球概率由比分模型从国际市场胜平负概率推算（第 3 步已验证）。\n")
     if rec["coverage"]["unmatched"]:
         L.append("\n未匹配上国际赔率的场次：" + "、".join(f"{u['num']} {u['home']}vs{u['away']}" for u in rec["coverage"]["unmatched"]) + "\n")
     return "".join(L)

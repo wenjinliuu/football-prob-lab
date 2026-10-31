@@ -2,7 +2,7 @@
 
 - 推荐票账本：每张票是否中奖、净收益。取消/退款的比赛按竞彩规则以 SP 1.00 计。
 - CLV：推荐时的 SP 与停售终赔比较（终赔来自赛果接口，只有胜平负）。推荐价长期高于终赔，说明买到了「便宜货」。
-- 影子账本：每天所有 EV ≥ 0 的胜平负选项各记 1 元，样本积累更快，用来检验方法本身。
+- 影子账本：每天所有 EV ≥ 0 的选项（胜平负和让球）各记 1 元，样本积累更快，用来检验方法本身。
 推荐文件只读，不修改。
 """
 import json
@@ -63,7 +63,7 @@ def main():
                     final = r[{"H": "had_h", "D": "had_d", "A": "had_a"}[PICK[l["pick"]]]]
                     clv.append(l["sp"] / final - 1)
         for l in rec["legs"]:
-            if l["shadow"] or l["pool"] != "胜平负" or l["ev"] < 0:
+            if l["ev"] < 0:
                 continue
             s, sp = leg_result(l, res)
             if s != "pending":
@@ -86,7 +86,7 @@ def main():
     if shadow:
         r = np.array([x["ret"] for x in shadow])
         lo, hi = ci(r)
-        md.append(f"- 影子账本（所有 EV ≥ 0 的胜平负选项各 1 元）：{len(r)} 注，ROI {pct(r.mean())}" +
+        md.append(f"- 影子账本（所有 EV ≥ 0 的选项各 1 元）：{len(r)} 注，ROI {pct(r.mean())}" +
                   (f"（95% 区间 {pct(lo)} ~ {pct(hi)}）" if lo == lo else "（样本太少）") + "。\n")
     md.append("\n## 明细\n\n")
     if tix:
