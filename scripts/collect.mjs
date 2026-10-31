@@ -12,7 +12,7 @@ if (!outDir || !ENV || !KEY) { console.error('need outDir, CLOUDBASE_ENV_ID, CLO
 
 function invoke(payload) {
   const out = execFileSync('tcb', ['fn', 'invoke', FN, '-e', ENV, '-X', 'POST', '-H', 'Content-Type: application/json', '-d', JSON.stringify(payload), '--api-key', KEY], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  const i = out.indexOf('{"action"');
+  const i = out.search(/^\{/m); // CLI 先打印提示行，再打印格式化的 JSON
   if (i < 0) throw new Error('unexpected CLI output: ' + out.slice(0, 500));
   return JSON.parse(out.slice(i).trim());
 }
