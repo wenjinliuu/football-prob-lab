@@ -48,6 +48,9 @@ GitHub Actions（本仓库）
 | `cloudbaserc.json` | 函数配置（type HTTP、Nodejs20.19） |
 | `scripts/collect.mjs` | 调用 `tcb fn invoke` 并把原始响应存为带时间戳的 JSON，**只新增不覆盖**。CLI 输出前后有提示文字，脚本截取第 0 列 `{` 到第 0 列 `}` 之间的 JSON |
 | `.github/workflows/deploy-cloudbase.yml` | 推送 `cloudbase/**` 或手动触发时部署 |
+| `analysis/load.py` | 把原始 JSON 整理成 DataFrame：`matches()`（每场一行，含 HAD 终赔、比分、让球、HAD/HHAD 赛果）、`odds_history()`（每次变赔一行，seq=0 初赔、is_final 终赔） |
+| `analysis/step1_market.py` | 第 1 步报告：抽水、校准、热门/中间/冷门策略、SP 区间 × 选项 ROI（BH 校正）、初赔 vs 终赔、赔率变动方向 → `reports/step1_market.md` |
+| `.github/workflows/analysis.yml` | 采集成功后或手动触发时重新生成 `reports/` 并提交 |
 | `.github/workflows/import-artifacts.yml` | 手动触发：把未过期的 `sporttery-raw-*` 附件补存到 `data/raw/sporttery/`（只新增不覆盖） |
 | `.github/workflows/collect-sporttery.yml` | 每天 02:17 UTC（北京 10:17）拉当日 `calc` 和前一天 `results`；部署成功后自动跑一次；手动触发时可传 `tasks`，例如 `calc results:2026-10-01:2026-10-07 history:2042385,2042386` |
 
@@ -79,7 +82,7 @@ GitHub Actions（本仓库）
 2. **历史回补**：2018 年起，先做五大联赛加欧冠和欧联。赛果接口按 30 天分段分页，再对每场调用 `history`。整个过程低频：每批 20 场、间隔 1.5 秒，分多天跑完，估计约 2 万场。
 3. **规范化**：DuckDB 加 Parquet，表包括 `matches`、`teams/team_aliases`、`sporttery_odds`（每次变赔一行）、`global_odds`、`predictions`（只追加）、`backtests`。详见报告的"数据质量与回测方案"一节。
 4. **国际赔率**：Football-Data.co.uk 的 CSV（有 Pinnacle 收盘价，用于历史；条款仅限个人使用，不要再分发），加上 The Odds API 免费档（每天拉一次 eu 区 1X2 和大小球；需要用户注册并新增 `ODDS_API_KEY` Secret）。赛事匹配用开球时间 ±3 小时、联赛、队名别名表，队名别名需要人工审核。
-5. **模型 A 回测**：用官方数据重跑中间、热门、冷门策略，分别按初赔和终赔两种口径，按赔率区间做校准图，并做 BH 多重检验校正。
+5. **模型 A 回测**（已写好 `analysis/step1_market.py`，等全量数据跑完后看结论）：用官方数据重跑中间、热门、冷门策略，分别按初赔和终赔两种口径，按赔率区间做校准图，并做 BH 多重检验校正。
 6. **概率链**：国际赔率去水（Shin 或 power 方法）→ 反解 λ → Dixon-Coles 比分矩阵 → 体彩整数让球的 HAD/HHAD 概率。**不要把亚盘直接当作体彩让球**：体彩让球是三项结果、没有走盘。模型可以用 penaltyblog（MIT）。
 7. **每日建议**：先只出单不买，跑 2 周。规则：EV = p × SP − 1 ≥ +5%，并且模型与市场的差 ≤ 0.08 时才正式推荐；没有合格场次时，给出当天 EV 最高的 1–2 个单关作为娱乐选项，写明预期亏损；不推荐 SP > 6 的冷门；单日上限 10 元。建议在开赛前冻结并做哈希，只追加，输了不删。
 8. 最后做网页仪表盘（静态页面，可以放 Cloudflare Pages）。
