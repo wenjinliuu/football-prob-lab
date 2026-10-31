@@ -1,7 +1,6 @@
 name: Import sporttery artifacts
 
-# 仓库公开期间，采集结果只作为 Actions 附件保存。
-# 仓库改成 Private 后手动运行一次，把未过期的附件补存到 data/raw/sporttery/（只新增不覆盖）。
+# 把早期只存成 Actions 附件的采集结果补存到 data/raw/sporttery/（只新增不覆盖）。手动运行。
 on:
   workflow_dispatch:
 
@@ -20,14 +19,6 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v5
-
-      - name: Require private repository
-        run: |
-          PRIVATE=$(gh api "repos/$GITHUB_REPOSITORY" --jq .private)
-          if [ "$PRIVATE" != "true" ]; then
-            echo "::error::仓库仍是公开的，体彩数据不能提交。先把仓库改成 Private 再运行。"
-            exit 1
-          fi
 
       - name: Download artifacts
         run: |

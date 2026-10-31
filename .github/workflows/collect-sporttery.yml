@@ -51,27 +51,15 @@ jobs:
           echo "tasks: $TASKS"
           node scripts/collect.mjs "$RUNNER_TEMP/raw" $TASKS
 
-      - name: Store (commit only when the repository is private)
+      - name: Store (commit to repository)
         if: always()
         run: |
-          PRIVATE=$(gh api "repos/$GITHUB_REPOSITORY" --jq .private)
+          # 2026-10-31 用户明确决定：仓库公开期间也直接提交原始数据。
           test -d "$RUNNER_TEMP/raw" || { echo "nothing collected"; exit 0; }
-          if [ "$PRIVATE" = "true" ]; then
-            mkdir -p data/raw/sporttery
-            cp -rn "$RUNNER_TEMP/raw/." data/raw/sporttery/
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add data/raw/sporttery
-            git diff --cached --quiet || git commit -m "data: sporttery raw $(TZ=Asia/Shanghai date +%F_%H%M)"
-            git pull --rebase -q && git push
-          else
-            echo "::warning::仓库是公开的：体彩数据不提交到仓库（避免公开转载），只作为 Actions 附件保存 90 天。改成 Private 后会自动改为提交存档，并可运行 Import sporttery artifacts 把附件补进仓库。"
-            echo "SAVE_ARTIFACT=1" >> "$GITHUB_ENV"
-          fi
-
-      - uses: actions/upload-artifact@v4
-        if: ${{ always() && env.SAVE_ARTIFACT == '1' }}
-        with:
-          name: sporttery-raw-${{ github.run_id }}
-          path: ${{ runner.temp }}/raw
-          retention-days: 90
+          mkdir -p data/raw/sporttery
+          cp -rn "$RUNNER_TEMP/raw/." data/raw/sporttery/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/raw/sporttery
+          git diff --cached --quiet || git commit -m "data: sporttery raw $(TZ=Asia/Shanghai date +%F_%H%M)"
+          git pull --rebase -q && git push
