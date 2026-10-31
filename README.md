@@ -2,7 +2,7 @@
 
 个人研究项目：用国际市场赔率和球队实力模型估计足球比赛概率，对比中国体彩竞彩 SP，做严格的按时间顺序回测，并每天给出小额娱乐性建议。**不接入任何投注或购彩功能。**
 
-研究报告：<https://claude.ai/artifact/QWaNmjcMtA9DPKoJcLqdAz>
+研究报告：<https://claude.ai/artifact/QWaNmjcMtA9DPKoJcLqdAz>　·　AI 交接：[docs/HANDOFF.md](docs/HANDOFF.md)
 
 ## 当前进度
 

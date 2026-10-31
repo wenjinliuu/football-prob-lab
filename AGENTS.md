@@ -1,0 +1,10 @@
+# AI 维护入口
+
+- 先读 `docs/HANDOFF.md`：项目目标、已定结论、当前架构、下一步。
+- 用中文和用户沟通；用户只用手机，构建部署全部走 GitHub Actions。
+- 部署只走 git → CI（`deploy-cloudbase.yml` 复用 `wenjinliuu/cloudbase-mcp-worker` 的工作流）；CloudBase MCP 只用于查数据、日志和排查。
+- 不要修改云开发环境里不属于本项目的函数（lottery-*、calenease-*）。
+- 体彩接口：低频、遇非 200 立即停止，不绕过任何访问控制；体彩数据不提交到公开仓库。
+- 原始数据只追加不覆盖；回测只使用赛前已知数据；只做研究和模拟，不接入投注。
+- 新增定时触发器或云端常驻任务前先征得用户同意。
+- 密钥只放 GitHub Secrets，不进入代码、日志、文档。
