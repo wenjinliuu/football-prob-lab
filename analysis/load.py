@@ -86,3 +86,18 @@ def odds_history() -> pd.DataFrame:
                 })
     cols = ["match_id", "pool", "seq", "is_final", "ts", "h", "d", "a", "goal_line"]
     return pd.DataFrame(out, columns=cols)
+
+
+def single_flags() -> pd.DataFrame:
+    """变赔接口 singleList：每场各玩法是否开放单关（1=可单关）。赛果接口的 bettingSingle 是整场标记，不等于胜平负可单关。"""
+    latest = {}
+    hdir = RAW / "history"
+    for f in sorted(hdir.glob("*.json"), key=lambda p: p.name.split("__")[-1]) if hdir.exists() else []:
+        it = json.loads(f.read_text())
+        if it.get("status") == 200 and (it.get("data") or {}).get("errorCode") == "0":
+            latest[it["matchId"]] = it
+    rows = []
+    for it in latest.values():
+        flags = {x["poolCode"]: int(x["single"]) for x in it["data"]["value"].get("singleList") or []}
+        rows.append({"match_id": int(it["matchId"]), "had_single": flags.get("HAD"), "hhad_single": flags.get("HHAD")})
+    return pd.DataFrame(rows, columns=["match_id", "had_single", "hhad_single"])

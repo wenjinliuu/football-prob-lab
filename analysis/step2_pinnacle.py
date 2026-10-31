@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import load
 import match_fd
 from step1_market import ci, pct, returns, table
 
@@ -75,7 +76,7 @@ def value_section(sel):
 def rule_section(sel):
     rows = []
     for name, g in [("EV ≥ 0", sel[sel["ev"] >= 0]), ("EV ≥ 5%", sel[sel["ev"] >= 0.05]),
-                    ("EV ≥ 5% 且 SP ≤ 6", sel[(sel["ev"] >= 0.05) & (sel["sp"] <= 6)]), ("EV ≥ 5% 且 SP ≤ 6 且可单关", sel[(sel["ev"] >= 0.05) & (sel["sp"] <= 6) & sel["single"]]),
+                    ("EV ≥ 5% 且 SP ≤ 6", sel[(sel["ev"] >= 0.05) & (sel["sp"] <= 6)]), ("EV ≥ 5% 且 SP ≤ 6 且可单关（以变赔历史为准）", sel[(sel["ev"] >= 0.05) & (sel["sp"] <= 6) & sel["single"]]),
                     ("EV ≥ 10%", sel[sel["ev"] >= 0.10])]:
         r = returns(g["sp"].to_numpy(), g["win"].to_numpy())
         lo, hi = ci(r)
@@ -87,7 +88,7 @@ def rule_section(sel):
 
 def main():
     st, fd, alias, x = match_fd.run()
-    x = x[x["score_ok"]].dropna(subset=["had_h", "had_d", "had_a", "PSCH", "PSCD", "PSCA", "PSH", "PSD", "PSA"])
+    x = x[x["score_ok"]].merge(load.single_flags(), on="match_id", how="left").dropna(subset=["had_h", "had_d", "had_a", "PSCH", "PSCD", "PSCA", "PSH", "PSD", "PSA"])
     y = x["had_result"].map({"H": 0, "D": 1, "A": 2}).to_numpy()
     st_odds = x[["had_h", "had_d", "had_a"]].to_numpy(float)
     ps_close = x[["PSCH", "PSCD", "PSCA"]].to_numpy(float)
@@ -116,7 +117,7 @@ def main():
     for j, o in enumerate("HDA"):
         rows.append(pd.DataFrame({"match_id": x["match_id"].to_numpy(), "year": x["year"].to_numpy(), "pick": o,
                                   "sp": st_odds[:, j], "p": p_close[:, j], "p_open": p_open[:, j], "win": y == j,
-                                  "single": x["single"].to_numpy() == 1}))
+                                  "single": x["had_single"].to_numpy() == 1}))
     sel = pd.concat(rows, ignore_index=True)
     sel["ev"] = sel["p"] * sel["sp"] - 1
     sel_open = sel.assign(ev=sel["p_open"] * sel["sp"] - 1)

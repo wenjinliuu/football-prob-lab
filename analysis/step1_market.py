@@ -237,8 +237,13 @@ def main():
         md.append(margin_section(hf[("hhad", "终赔")], ["h", "d", "a"], "让球胜平负终赔（重点联赛）"))
     paid = m[m["pool_status"] == "Payout"]
     single = paid.groupby("year")["single"].mean()[paid.groupby("year").size() >= 200]
-    md.append("胜平负开放单关的比例：" + "，".join(f"{y} 年 {pct(v, 0)}" for y, v in single.items()) +
-              "。没开单关的场次只能串关购买，实际返还率更低。\n\n")
+    md.append("赛果接口「整场单关」标记的比例：" + "，".join(f"{y} 年 {pct(v, 0)}" for y, v in single.items()) +
+              "。注意这不等于胜平负可单关；分玩法的单关信息以变赔历史为准。没开单关的场次只能串关购买。\n\n")
+    sf = load.single_flags().merge(m[["match_id", "year"]], on="match_id")
+    if len(sf) >= 200:
+        g = sf.groupby("year").agg(n=("match_id", "size"), had=("had_single", "mean"), hhad=("hhad_single", "mean"))
+        g = g[g["n"] >= 100]
+        md.append("重点联赛按变赔历史统计的单关比例：" + "，".join(f"{y} 年胜平负 {pct(r.had, 0)}、让球 {pct(r.hhad, 0)}" for y, r in g.iterrows()) + "。\n\n")
 
     md.append("## 2. 赔率校准：标的概率和实际命中对得上吗\n\n")
     md.append("把每场的主/平/客三项都当作一个选项，按去水后的隐含概率分组，比较实际命中率。"
