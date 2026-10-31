@@ -31,6 +31,7 @@ jobs:
           restore-keys: external-
       - run: python analysis/step1_market.py
       - run: python analysis/step2_pinnacle.py
+      - run: python analysis/step3_history.py
       - name: Commit reports
         run: |
           git config user.name "github-actions[bot]"

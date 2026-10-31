@@ -54,6 +54,7 @@ GitHub Actions（本仓库）
 | `analysis/fd.py` | 下载 Football-Data 五大联赛 2017/18 起的 CSV（含 Pinnacle 赛前价 PSH 和收盘价 PSCH），缓存在 `data/external/`（gitignore，不提交）。**Pinnacle 只到 2025-12 中旬**，之后只有平均价 |
 | `analysis/match_fd.py` | 用体彩 teamId + 同日期同比分的共现次数自动生成队名对照 `data/mappings/team_alias_fd.csv`（status=review 的要人工看），再逐场匹配。2018 年 1771 场匹配 1766 场，比分全一致；没配上的是升降级附加赛 |
 | `analysis/step2_pinnacle.py` | 第 2 步报告：抽水对比、体彩 vs Pinnacle 准确度（Shin 去水）、按 Pinnacle 概率算体彩 EV 的价值检验 → `reports/step2_pinnacle.md` |
+| `analysis/step3_history.py` | 第 3 步报告（变赔历史 1.4 万场）：让球泊松模型验证、胜平负 vs 让球 EV 对比、开盘/上午/停售三个时点的回报和 CLV → `reports/step3_history.md` |
 | `analysis/daily.py` | 每日推荐：最新体彩在售快照 × 最新 Odds API 快照（相差 ≤90 分钟、不超过 2 小时）→ 联赛+开球时间+英文名相似度匹配（中文队→英文名来自 `team_alias_fd.csv`，匹配成功的写进 `team_alias_oddsapi.csv`）→ Pinnacle Shin 去水 → EV。正式：HAD、EV≥5%、SP≤6，可单关出单关，否则满两个组 2串1；无正式时出娱乐 2/3/4 串 1（EV≥-8%、SP 1.3–4.0）。每注 2 元、日上限 10 元，每条腿给底线 SP。让球用泊松模型推算，只做影子。输出 `recommendations/YYYY-MM-DD.{json,md,sha256}`，已存在不覆盖。首测 36/36 场匹配正确 |
 | `analysis/settle.py` | 赛后结算 → `reports/ledger.md`：推荐票账本、CLV（推荐 SP 对停售终赔）、影子账本（所有 EV≥0 的 HAD 选项各 1 元） |
 | `.github/workflows/daily-picks.yml` | 两个采集工作流完成后触发（不是新定时器）：生成当天推荐 + 结算 |
@@ -87,7 +88,7 @@ GitHub Actions（本仓库）
 ## 6. 下一步（按优先级）
 
 1. **长期存储**：已完成，直接提交到仓库；用户计划额度恢复后把仓库改为私有。
-2. **历史回补**：2018 年起，先做五大联赛加欧冠和欧联。赛果接口按 30 天分段分页，再对每场调用 `history`。整个过程低频：每批 20 场、间隔 1.5 秒，分多天跑完，估计约 2 万场。
+2. **历史回补**（2026-10-31 完成：赛果 2018–2026 全部联赛约 4.9 万场；重点联赛变赔历史 14,001 场）：2018 年起，先做五大联赛加欧冠和欧联。赛果接口按 30 天分段分页，再对每场调用 `history`。整个过程低频：每批 20 场、间隔 1.5 秒，分多天跑完，估计约 2 万场。
 3. **规范化**：DuckDB 加 Parquet，表包括 `matches`、`teams/team_aliases`、`sporttery_odds`（每次变赔一行）、`global_odds`、`predictions`（只追加）、`backtests`。详见报告的"数据质量与回测方案"一节。
 4. **国际赔率**（历史部分已完成：`analysis/fd.py` + `match_fd.py` + `step2_pinnacle.py`；The Odds API 实时采集已上线，Secret `ODDS_API_KEY` 已配置；和体彩在售场次的实时匹配未做）：Football-Data.co.uk 的 CSV（有 Pinnacle 收盘价，用于历史；条款仅限个人使用，不要再分发），加上 The Odds API 免费档（每天拉一次 eu 区 1X2 和大小球；需要用户注册并新增 `ODDS_API_KEY` Secret）。赛事匹配用开球时间 ±3 小时、联赛、队名别名表，队名别名需要人工审核。
 5. **模型 A 回测**（已写好 `analysis/step1_market.py`，等全量数据跑完后看结论）：用官方数据重跑中间、热门、冷门策略，分别按初赔和终赔两种口径，按赔率区间做校准图，并做 BH 多重检验校正。
