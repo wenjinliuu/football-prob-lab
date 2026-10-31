@@ -1,0 +1,1 @@
+{"matchId": 1012609, "url": "https://webapi.sporttery.cn/gateway/uniform/football/getOddsHistoryV1.qry?matchId=1012609", "fetchedAt": "2026-10-31T11:14:07.348Z", "status": 500, "ms": 10251, "data": {"emptyFlag": false, "errorCode": "99999", "errorMessage": "服务忙，请您稍后重试", "success": false}}
