@@ -289,7 +289,7 @@ def ticket(kind, legs, min_ev):
     odds = float(np.prod([l["sp"] for l in legs]))
     p = float(np.prod([l["p"] for l in legs]))
     return {"type": kind, "stake": STAKE, "legs": [leg_view(l, min_ev) for l in legs], "odds": round(odds, 2),
-            "payout": round(STAKE * odds, 2), "p_win": round(p, 4), "ev": round(p * odds - 1, 4)}
+            "payout": round(STAKE * odds, 2), "p_win": round(p, 8), "ev": round(p * odds - 1, 4)}
 
 
 def choose(legs):
