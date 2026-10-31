@@ -42,6 +42,8 @@ def matches() -> pd.DataFrame:
             "league": m["leagueNameAbbr"],
             "home": m["homeTeam"],
             "away": m["awayTeam"],
+            "home_id": int(m["homeTeamId"]),
+            "away_id": int(m["awayTeamId"]),
             "home_goals": hg,
             "away_goals": ag,
             "pool_status": m["poolStatus"],

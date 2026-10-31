@@ -24,11 +24,17 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -q -r requirements.txt
+      - uses: actions/cache@v4
+        with:
+          path: data/external
+          key: external-${{ github.run_id }}
+          restore-keys: external-
       - run: python analysis/step1_market.py
+      - run: python analysis/step2_pinnacle.py
       - name: Commit reports
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add reports
-          git diff --cached --quiet || git commit -m "reports: regenerate step1 market report"
+          git add reports data/mappings
+          git diff --cached --quiet || git commit -m "reports: regenerate analysis reports"
           git pull --rebase -q && git push
