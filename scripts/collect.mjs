@@ -1,7 +1,7 @@
 // 通过 CloudBase CLI 调用 jc-collector（HTTP 函数），把原始响应存成带时间戳的 JSON 文件（只新增，不覆盖）。
 // 用法：node scripts/collect.mjs <outDir> [calc] [results:YYYY-MM-DD:YYYY-MM-DD] [results-range:开始:结束] [history:id1,id2,...]
 // results 单次 ≤30 天；results-range 自动切成 30 天一段，用于历史回补。
-// history-pending:N 从仓库已存的赛果里挑出重点联赛中还没有变赔历史的场次（新到旧），拉 N 场，每次调用 20 场。
+// history-pending:N 从仓库已存的赛果里挑出重点联赛中还没有变赔历史的场次（新到旧），拉 N 场，每次调用 5 场。
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -62,7 +62,14 @@ function windows(a, b) {
 
 
 function history(ids) {
-  const { result } = invoke({ action: 'history', matchIds: ids });
+  let result;
+  try {
+    ({ result } = invoke({ action: 'history', matchIds: ids }));
+  } catch (e) {
+    summary.push(`history: invoke failed (${String(e.message || e).split('\n').find((l) => l.includes('✖')) || 'error'}), stopped`);
+    halted = true;
+    return;
+  }
   const ok = (result.items || []).filter((it) => good(it));
   for (const it of result.items || []) save('history', String(it.matchId), it);
   summary.push(`history: ${ok.length}/${ids.length} ok${result.stoppedEarly ? ' (stopped early)' : ''}`);
@@ -70,6 +77,7 @@ function history(ids) {
 }
 
 // 五大联赛 + 欧冠、欧罗巴、欧协联（体彩 leagueId）
+const HISTORY_BATCH = 5;
 const FOCUS_LEAGUES = new Set([25, 62, 40, 37, 32, 69, 70, 1033103]);
 const ARCHIVE = 'data/raw/sporttery';
 function pendingHistory(n) {
@@ -109,9 +117,10 @@ for (const t of tasks) {
   } else if (kind === 'history-pending') {
     const ids = pendingHistory(Number(a) || 200);
     summary.push(`history-pending: ${ids.length} selected`);
-    for (let i = 0; i < ids.length && !halted; i += 20) {
-      history(ids.slice(i, i + 20));
-      if (i + 20 < ids.length) await sleep(1500);
+    // 每次调用 5 场（函数内每场间隔 1.5 秒，约 9 秒），避免 CLI 等待 HTTP 函数超时
+    for (let i = 0; i < ids.length && !halted; i += HISTORY_BATCH) {
+      history(ids.slice(i, i + HISTORY_BATCH));
+      if (i + HISTORY_BATCH < ids.length) await sleep(1500);
     }
   } else {
     console.error('unknown task ' + t); process.exitCode = 2;
