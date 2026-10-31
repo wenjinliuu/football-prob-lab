@@ -11,6 +11,7 @@ git config user.email "tablet-worker@users.noreply.github.com"
 
 total=$(wc -l < "$SHARD")
 for ((start=1; start<=total; start+=CHUNK)); do
+  echo "== 第 $(( (start-1)/CHUNK + 1 )) 批（共 $(( (total+CHUNK-1)/CHUNK )) 批），同步仓库中…"
   git pull -q --rebase origin main || { echo "git pull 失败，稍后重跑"; exit 1; }
   if [ -f data/backfill/HALT ]; then echo "发现 HALT 标记，停止"; exit 3; fi
   sed -n "${start},$((start+CHUNK-1))p" "$SHARD" > "$TMPDIR/chunk.txt"
@@ -19,6 +20,7 @@ for ((start=1; start<=total; start+=CHUNK)); do
   git add "$OUT"
   if ! git diff --cached --quiet; then
     git commit -q -m "data: sporttery history (tablet) $(date +%F_%H%M)"
+    echo "提交并上传中…"
     for i in 1 2 3; do git pull -q --rebase origin main && git push -q origin main && break; sleep 5; done
   fi
   if [ $rc -ne 0 ]; then echo "采集停止（代码 $rc），已提交已拉到的部分"; exit $rc; fi

@@ -103,8 +103,7 @@ def main():
         if not ok(rec):
             print(f"[fetch_history] 异常，停止：matchId={mid} status={rec.get('status')} {rec.get('snippet') or rec.get('error') or ''}", file=sys.stderr)
             return 1
-        if (n + 1) % 100 == 0:
-            print(f"[fetch_history] {n + 1}/{len(ids)}", file=sys.stderr)
+        print(f"[{n + 1}/{len(ids)}] {mid} ok {rec.get('ms', 0) / 1000:.1f}s", file=sys.stderr, flush=True)
         time.sleep(GAP)
     print("[fetch_history] 完成", file=sys.stderr)
     return 0
