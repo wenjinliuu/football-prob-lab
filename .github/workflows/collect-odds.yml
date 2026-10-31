@@ -1,0 +1,40 @@
+name: Collect international odds
+
+# The Odds API：五大联赛 + 欧冠/欧罗巴/欧协联的胜平负赔率（欧洲区），直接在 GitHub Actions 上抓。
+# 与体彩采集同一时间（北京 10:17）运行，单独成一个工作流，避免被长时间的回补任务阻塞。
+# 每次 8 点额度，免费档每月 500 点。2026-10-31 用户同意新增此定时任务。
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect-odds
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+      - name: Collect
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: node scripts/odds.mjs "$RUNNER_TEMP/odds"
+      - name: Store (commit to repository)
+        if: always()
+        run: |
+          test -d "$RUNNER_TEMP/odds" || { echo "nothing collected"; exit 0; }
+          mkdir -p data/raw/odds_api
+          cp -rn "$RUNNER_TEMP/odds/." data/raw/odds_api/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/raw/odds_api
+          git diff --cached --quiet || git commit -m "data: odds api $(TZ=Asia/Shanghai date +%F_%H%M)"
+          for i in 1 2 3; do git pull --rebase -q && git push && break; sleep 5; done
