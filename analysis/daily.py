@@ -7,7 +7,7 @@
 3. 概率：胜平负用 Pinnacle 去水（Shin）。让球胜平负用泊松比分模型从胜平负概率反推（第 3 步验证：不比体彩让球赔率差）。
 4. 选择：
    - 正式推荐（未验证）：胜平负或让球、EV ≥ 5%、SP ≤ 6；可单关出单关，否则满两个组 2 串 1；最多两张。
-   - 娱乐串关：每天都出。每场取 SP 1.5–3.0、EV ≥ −8% 里 EV 最高的一项，按 EV 排序，前 n 场组 n 串 1（2/3/4/6/8）。
+   - 娱乐串关：每天都出。每场取 EV ≥ −8% 里 EV 最高的一项，按 EV 排序，前 n 场组 n 串 1。2/3/4 串 1 用 SP 1.5–3.0 的稳腿，6/8 串 1 用 SP 2.2–4.0 的中高赔腿拉大奖金。
    - 每注 2 元，单日合计 ≤ 10 元。每条腿给出「底线 SP」：下单时低于它就别买。
 5. 冻结：写 recommendations/YYYY-MM-DD.json 和 .md，附 sha256；同一天已存在则不覆盖。
 只做研究和模拟，不接入投注。
@@ -43,6 +43,8 @@ FORMAL_EV, FORMAL_MAX_SP = 0.05, 6.0
 # 每场取 EV 最高的一项，再按 EV 从高到低排：小串只用最好的几场，大串依次往下补。
 # 第 3 步回测：EV -5%~0 的选项实际只亏 1–4%；但每天每场最好的一项中位数约 -7.5%，门槛设 -5% 凑不齐 6/8 串。
 FUN_MIN_EV, FUN_SP = -0.08, (1.5, 3.0)
+# 6/8 串 1 用中高赔的腿拉大奖金（用户 2026-10-31 要求）：SP 2.2–4.0，同样按 EV 从高到低取。
+BIG_PARLAY_MIN_N, BIG_SP = 6, (2.2, 4.0)
 STAKE, DAILY_CAP = 2, 10
 FUN_PARLAYS = (2, 3, 4, 6, 8)  # 竞彩胜平负/让球最多 8 串 1；用户 2026-10-31 要求
 FUN_PRIORITY = (8, 6, 4, 3, 2)  # 预算不够时先保留大串（用户想要偶尔中个大的）
@@ -302,10 +304,14 @@ def choose(legs):
         tickets.append({**ticket("正式（未验证）·2串1", [multi.iloc[0], multi.iloc[1]], FORMAL_EV), "tier": "formal"})
     tickets = tickets[:2]  # 正式票最多两张，给娱乐串关留预算
 
-    fun = pool[(pool["ev"] >= FUN_MIN_EV) & pool["sp"].between(*FUN_SP)]
-    fun = fun.drop_duplicates("match_id")  # pool 已按 EV 降序：每场取 EV 最高的一项，整体也按 EV 排
-    by_n = {n: {**ticket(f"娱乐·{n}串1", [fun.iloc[i] for i in range(n)], FUN_MIN_EV), "tier": "fun"}
-            for n in FUN_PARLAYS if len(fun) >= n}
+    def legs_in(sp_range):  # pool 已按 EV 降序：每场取 EV 最高的一项，整体也按 EV 排
+        return pool[(pool["ev"] >= FUN_MIN_EV) & pool["sp"].between(*sp_range)].drop_duplicates("match_id")
+    stable, big = legs_in(FUN_SP), legs_in(BIG_SP)
+    by_n = {}
+    for n in FUN_PARLAYS:
+        src, tag = (big, "大奖") if n >= BIG_PARLAY_MIN_N else (stable, "稳")
+        if len(src) >= n:
+            by_n[n] = {**ticket(f"娱乐·{n}串1（{tag}）", [src.iloc[i] for i in range(n)], FUN_MIN_EV), "tier": "fun"}
     spent = sum(t["stake"] for t in tickets)
     keep = []
     for n in FUN_PRIORITY:
@@ -338,7 +344,7 @@ def to_markdown(rec):
         for l in top.itertuples():
             L.append(f"| {l.num} | {l.home} vs {l.away} | {l.pool} | {l.pick} | {l.sp:.2f} | {l.p:.1%} | {l.ev:+.1%} | {'是' if l.single else '否'} |\n")
         L.append("\n> 「正式（未验证）」：按国际市场算期望回报 ≥ 5%，历史回测还不能证明真能赚，等实盘记账检验。"
-                 "娱乐串关每腿是赔率 1.5–3 的稳腿、按期望回报从高到低取，长期仍是小亏，图个乐。让球概率由比分模型从国际市场胜平负概率推算（第 3 步已验证）。\n")
+                 "娱乐串关按期望回报从高到低取腿：2/3/4 串 1 用赔率 1.5–3 的稳腿，6/8 串 1 用赔率 2.2–4 的腿拉大奖金，长期仍是小亏，图个乐。让球概率由比分模型从国际市场胜平负概率推算（第 3 步已验证）。\n")
     if rec["coverage"]["unmatched"]:
         L.append("\n未匹配上国际赔率的场次：" + "、".join(f"{u['num']} {u['home']}vs{u['away']}" for u in rec["coverage"]["unmatched"]) + "\n")
     return "".join(L)
