@@ -14,7 +14,10 @@ function invoke(payload) {
   const out = execFileSync('tcb', ['fn', 'invoke', FN, '-e', ENV, '-X', 'POST', '-H', 'Content-Type: application/json', '-d', JSON.stringify(payload), '--api-key', KEY], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   const i = out.search(/^\{/m); // CLI 先打印提示行，再打印格式化的 JSON
   if (i < 0) throw new Error('unexpected CLI output: ' + out.slice(0, 500));
-  return JSON.parse(out.slice(i).trim());
+  const rest = out.slice(i);
+  const end = rest.search(/^\}\s*$/m); // 顶层对象以第 0 列的 } 结束，其后还有 CLI 提示
+  if (end < 0) throw new Error('no closing brace in CLI output');
+  return JSON.parse(rest.slice(0, end + 1));
 }
 
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
