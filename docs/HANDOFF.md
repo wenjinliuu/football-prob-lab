@@ -47,6 +47,7 @@ GitHub Actions（本仓库）
 | `cloudbase/jc-collector/scf_bootstrap` | HTTP 函数启动脚本（监听 9000） |
 | `cloudbaserc.json` | 函数配置（type HTTP、Nodejs20.19） |
 | `scripts/collect.mjs` | 调用 `tcb fn invoke` 并把原始响应存为带时间戳的 JSON，**只新增不覆盖**。CLI 输出前后有提示文字，脚本截取第 0 列 `{` 到第 0 列 `}` 之间的 JSON |
+| `scripts/fetch_history.py` | 独立的变赔历史采集脚本（只用 Python 标准库），规则同云函数；供线 2（电子衣橱 Lighthouse，`ai-wardrobe-lab` 仓库的 `sporttery-worker.yml` 通过 SSH 运行）和线 3（小米平板 Termux，见 `docs/tablet-worker.md`）使用。分工名单 `data/backfill/shard_*.txt`；仓库里出现 `data/backfill/HALT` 时两条线都会停 |
 | `.github/workflows/deploy-cloudbase.yml` | 推送 `cloudbase/**` 或手动触发时部署 |
 | `analysis/load.py` | 把原始 JSON 整理成 DataFrame：`matches()`（每场一行，含 HAD 终赔、比分、让球、HAD/HHAD 赛果）、`odds_history()`（每次变赔一行，seq=0 初赔、is_final 终赔） |
 | `analysis/step1_market.py` | 第 1 步报告：抽水、校准、热门/中间/冷门策略、SP 区间 × 选项 ROI（BH 校正）、初赔 vs 终赔、赔率变动方向 → `reports/step1_market.md` |
@@ -73,7 +74,7 @@ GitHub Actions（本仓库）
 - `jc/football/getMatchCalculatorV1.qry?poolCode=had,hhad&channel=c`：在售比赛及 SP。字段在 `value.matchInfoList[].subMatchList[]`，包括 `matchId`、`matchNumStr`、`leagueAbbName`、`homeTeamAbbName`、`homeTeamAbbEnName`、`had{h,d,a,updateTime}`、`hhad{goalLine,h,d,a}`。`goalLine` 为 `-1` 表示主队让 1 球。
 - `uniform/football/getUniformMatchResultV1.qry?matchBeginDate=&matchEndDate=&leagueId=&pageSize=100&pageNo=&isFix=0&matchPage=1&pcOrWap=1`（Referer 用 `https://www.lottery.gov.cn/jc/zqsgkj/`）：赛果。`sectionsNo999` 是全场比分，`sectionsNo1` 是半场比分，另有 `goalLine`、最终 HAD 的 `h/d/a`、`winFlag`、`poolStatus`、`value.pages`。2018 年的数据仍然可以查到。
 - `uniform/football/getOddsHistoryV1.qry?matchId=`：返回 `hadList`、`hhadList`、`ttgList`、`crsList`、`hafuList`，**按时间倒序**，每条带 `updateDate` / `updateTime`。最后一条（最早）是初赔，第一条（最新）是终赔，终赔与赛果接口中的 h/d/a 一致。
-- 合规红线：低频；遇到 403/567 或验证页立即停止；**不用代理池、不换 IP、不解验证码、不绕过 WAF**；体彩数据不对外再分发（原始数据提交到本仓库是用户明确决定）。
+- 合规红线：低频；遇到 403/567 或验证页立即停止；**不用代理池、不解验证码、不绕过 WAF**；用户 2026-10-31 明确决定变赔历史回补三条线并行（见 `data/backfill/`），每条线单线程、间隔 1.5 秒；体彩数据不对外再分发（原始数据提交到本仓库是用户明确决定）。
 
 ## 5. CloudBase CLI 注意事项（已审计）
 
