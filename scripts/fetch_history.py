@@ -82,6 +82,7 @@ def main():
     ap.add_argument("ids", nargs="*")
     ap.add_argument("--shard")
     ap.add_argument("--out")
+    ap.add_argument("--gap", type=float, default=GAP, help="每场间隔秒数，默认 1.5，最小 1.5")
     ap.add_argument("--reverse", action="store_true", help="从名单末尾往前拉（同一台机器上第二条线用，与正序的线在中间会合）")
     ap.add_argument("--halt-url", help="每 20 场检查一次，返回 200 就停止（三条线共用的停止标记）")
     a = ap.parse_args()
@@ -116,7 +117,7 @@ def main():
             print(f"[fetch_history] 异常，停止：matchId={mid} status={rec.get('status')} {rec.get('snippet') or rec.get('error') or ''}", file=sys.stderr)
             return 1
         print(f"[{n + 1}/{len(ids)}] {mid} ok {rec.get('ms', 0) / 1000:.1f}s", file=sys.stderr, flush=True)
-        time.sleep(GAP)
+        time.sleep(max(GAP, a.gap))
     print("[fetch_history] 完成", file=sys.stderr)
     return 0
 
