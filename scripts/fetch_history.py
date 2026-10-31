@@ -59,6 +59,13 @@ def ok(rec):
     return d.get("errorCode") == "0" or (d.get("success") is False and d.get("errorCode") == "")
 
 
+def ok_file(f):
+    try:
+        return ok(json.loads(f.read_text()))
+    except ValueError:
+        return False
+
+
 def done_ids(out):
     s = set()
     for f in out.glob("*.json"):
@@ -75,6 +82,7 @@ def main():
     ap.add_argument("ids", nargs="*")
     ap.add_argument("--shard")
     ap.add_argument("--out")
+    ap.add_argument("--reverse", action="store_true", help="从名单末尾往前拉（同一台机器上第二条线用，与正序的线在中间会合）")
     ap.add_argument("--halt-url", help="每 20 场检查一次，返回 200 就停止（三条线共用的停止标记）")
     a = ap.parse_args()
     ids = [x.strip() for x in (Path(a.shard).read_text().split() if a.shard else a.ids) if x.strip()]
@@ -83,6 +91,8 @@ def main():
         out.mkdir(parents=True, exist_ok=True)
         skip = done_ids(out)
         ids = [i for i in ids if i not in skip]
+    if a.reverse:
+        ids.reverse()
     print(f"[fetch_history] {len(ids)} to fetch", file=sys.stderr)
     for n, mid in enumerate(ids):
         if a.halt_url and n % 20 == 0:
@@ -93,6 +103,8 @@ def main():
                         return 3
             except Exception:
                 pass
+        if out and any(ok_file(f) for f in out.glob(f"{mid}__*.json")):
+            continue  # 另一条线已经拉过（两条线会合时）
         rec = fetch(mid)
         line = json.dumps(rec, ensure_ascii=False)
         if out:
