@@ -4,14 +4,14 @@ name: Collect sporttery data
 # GitHub 服务器直连体彩接口会被拦截（HTTP 567），所以这里只调用云函数。
 on:
   schedule:
-    - cron: "17 2 * * *"   # 北京时间 10:17：当日在售赔率 + 前一天赛果
+    - cron: "17 2 * * *"   # 北京时间 10:17：当日在售赔率 + 同一时刻的国际赔率 + 前一天赛果
   workflow_run:
     workflows: ["Deploy CloudBase functions"]
     types: [completed]
   workflow_dispatch:
     inputs:
       tasks:
-        description: "任务，空格分隔：calc / results:开始:结束 / results-range:开始:结束 / history:id1,id2 / history-pending:场数"
+        description: "任务，空格分隔：calc / odds（国际赔率）/ results:开始:结束 / results-range:开始:结束 / history:id1,id2 / history-pending:场数"
         default: "calc"
 
 permissions:
@@ -47,19 +47,25 @@ jobs:
           INPUT_TASKS: ${{ github.event.inputs.tasks }}
         run: |
           YESTERDAY=$(TZ=Asia/Shanghai date -d "yesterday" +%F)
-          TASKS="${INPUT_TASKS:-calc results:$YESTERDAY:$YESTERDAY}"
+          TASKS="${INPUT_TASKS:-calc odds results:$YESTERDAY:$YESTERDAY}"
           echo "tasks: $TASKS"
+          echo "TASKS=$TASKS" >> "$GITHUB_ENV"
           node scripts/collect.mjs "$RUNNER_TEMP/raw" $TASKS
+
+      - name: Collect international odds (The Odds API)
+        if: ${{ always() && contains(format(' {0} ', env.TASKS), ' odds ') }}
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: node scripts/odds.mjs "$RUNNER_TEMP/odds"
 
       - name: Store (commit to repository)
         if: always()
         run: |
           # 2026-10-31 用户明确决定：仓库公开期间也直接提交原始数据。
-          test -d "$RUNNER_TEMP/raw" || { echo "nothing collected"; exit 0; }
-          mkdir -p data/raw/sporttery
-          cp -rn "$RUNNER_TEMP/raw/." data/raw/sporttery/
+          if [ -d "$RUNNER_TEMP/raw" ]; then mkdir -p data/raw/sporttery && cp -rn "$RUNNER_TEMP/raw/." data/raw/sporttery/; fi
+          if [ -d "$RUNNER_TEMP/odds" ]; then mkdir -p data/raw/odds_api && cp -rn "$RUNNER_TEMP/odds/." data/raw/odds_api/; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/raw/sporttery
+          git add data/raw
           git diff --cached --quiet || git commit -m "data: sporttery raw $(TZ=Asia/Shanghai date +%F_%H%M)"
           git pull --rebase -q && git push

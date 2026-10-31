@@ -122,6 +122,8 @@ for (const t of tasks) {
       history(ids.slice(i, i + HISTORY_BATCH));
       if (i + HISTORY_BATCH < ids.length) await sleep(1500);
     }
+  } else if (kind === 'odds') {
+    // 国际赔率由 scripts/odds.mjs 在同一个 job 里采集
   } else {
     console.error('unknown task ' + t); process.exitCode = 2;
   }
