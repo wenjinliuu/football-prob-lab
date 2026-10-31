@@ -86,7 +86,8 @@ function pendingHistory(n) {
   if (fs.existsSync(hdir)) {
     for (const f of fs.readdirSync(hdir)) {
       const it = JSON.parse(fs.readFileSync(path.join(hdir, f), 'utf8'));
-      if (good(it)) done.add(Number(it.matchId));
+      // 正常数据，或 200 但接口明确返回空（延期/取消场次没有变赔记录），都算已处理
+      if (good(it) || (it.status === 200 && it.data && it.data.success === false && it.data.errorCode === '')) done.add(Number(it.matchId));
     }
   }
   const matches = new Map();
@@ -94,7 +95,8 @@ function pendingHistory(n) {
   for (const f of fs.existsSync(rdir) ? fs.readdirSync(rdir) : []) {
     const r = JSON.parse(fs.readFileSync(path.join(rdir, f), 'utf8'));
     for (const m of r.data?.value?.matchResult || []) {
-      if (FOCUS_LEAGUES.has(Number(m.leagueId)) && !done.has(Number(m.matchId))) matches.set(Number(m.matchId), m.matchDate);
+      const played = /^\d+:\d+$/.test(m.sectionsNo999 || ''); // 没有比分的（延期/取消）没有变赔记录，跳过
+      if (played && FOCUS_LEAGUES.has(Number(m.leagueId)) && !done.has(Number(m.matchId))) matches.set(Number(m.matchId), m.matchDate);
     }
   }
   return [...matches].sort((x, y) => (x[1] < y[1] ? 1 : x[1] > y[1] ? -1 : y[0] - x[0])).slice(0, n).map(([id]) => id);
