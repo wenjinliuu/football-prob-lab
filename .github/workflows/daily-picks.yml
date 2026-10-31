@@ -1,0 +1,39 @@
+name: Daily picks
+
+# 采集完成后自动运行（不是新的定时器，跟随两个采集工作流）：
+# 1. 体彩在售快照和国际赔率快照都在 2 小时内、彼此相差 ≤ 90 分钟时，生成当天推荐并冻结（已存在则跳过）；
+# 2. 用最新赛果更新账本 reports/ledger.md。
+# 只做模拟记录，不接入投注。
+on:
+  workflow_run:
+    workflows: ["Collect international odds", "Collect sporttery data"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-picks
+  cancel-in-progress: false
+
+jobs:
+  picks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q -r requirements.txt
+      - name: Generate today's picks
+        run: python analysis/daily.py
+      - name: Settle
+        run: python analysis/settle.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add recommendations reports/ledger.md data/mappings 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "picks: $(TZ=Asia/Shanghai date +%F_%H%M)"
+          for i in 1 2 3; do git pull --rebase -q && git push && break; sleep 5; done

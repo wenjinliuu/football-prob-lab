@@ -53,6 +53,9 @@ GitHub Actions（本仓库）
 | `analysis/fd.py` | 下载 Football-Data 五大联赛 2017/18 起的 CSV（含 Pinnacle 赛前价 PSH 和收盘价 PSCH），缓存在 `data/external/`（gitignore，不提交）。**Pinnacle 只到 2025-12 中旬**，之后只有平均价 |
 | `analysis/match_fd.py` | 用体彩 teamId + 同日期同比分的共现次数自动生成队名对照 `data/mappings/team_alias_fd.csv`（status=review 的要人工看），再逐场匹配。2018 年 1771 场匹配 1766 场，比分全一致；没配上的是升降级附加赛 |
 | `analysis/step2_pinnacle.py` | 第 2 步报告：抽水对比、体彩 vs Pinnacle 准确度（Shin 去水）、按 Pinnacle 概率算体彩 EV 的价值检验 → `reports/step2_pinnacle.md` |
+| `analysis/daily.py` | 每日推荐：最新体彩在售快照 × 最新 Odds API 快照（相差 ≤90 分钟、不超过 2 小时）→ 联赛+开球时间+英文名相似度匹配（中文队→英文名来自 `team_alias_fd.csv`，匹配成功的写进 `team_alias_oddsapi.csv`）→ Pinnacle Shin 去水 → EV。正式：HAD、EV≥5%、SP≤6，可单关出单关，否则满两个组 2串1；无正式时出娱乐 2串1/3串1（EV≥-8%、SP 1.3–4.0）。每注 2 元、日上限 10 元，每条腿给底线 SP。让球用泊松模型推算，只做影子。输出 `recommendations/YYYY-MM-DD.{json,md,sha256}`，已存在不覆盖。首测 36/36 场匹配正确 |
+| `analysis/settle.py` | 赛后结算 → `reports/ledger.md`：推荐票账本、CLV（推荐 SP 对停售终赔）、影子账本（所有 EV≥0 的 HAD 选项各 1 元） |
+| `.github/workflows/daily-picks.yml` | 两个采集工作流完成后触发（不是新定时器）：生成当天推荐 + 结算 |
 | `.github/workflows/analysis.yml` | 采集成功后或手动触发时重新生成 `reports/` 并提交 |
 | `.github/workflows/import-artifacts.yml` | 手动触发：把未过期的 `sporttery-raw-*` 附件补存到 `data/raw/sporttery/`（只新增不覆盖） |
 | `scripts/odds.mjs` + `.github/workflows/collect-odds.yml` | The Odds API 国际赔率（h2h、eu 区、五大联赛 + 欧冠/欧罗巴/欧协联），直接在 GitHub Actions 抓，每天北京 10:17（用户 2026-10-31 同意新增此定时任务），存 `data/raw/odds_api/h2h/`。每次 8 点额度，免费档 500 点/月。首次实测 8 个联赛都含 pinnacle |
@@ -88,7 +91,7 @@ GitHub Actions（本仓库）
 4. **国际赔率**（历史部分已完成：`analysis/fd.py` + `match_fd.py` + `step2_pinnacle.py`；The Odds API 实时采集已上线，Secret `ODDS_API_KEY` 已配置；和体彩在售场次的实时匹配未做）：Football-Data.co.uk 的 CSV（有 Pinnacle 收盘价，用于历史；条款仅限个人使用，不要再分发），加上 The Odds API 免费档（每天拉一次 eu 区 1X2 和大小球；需要用户注册并新增 `ODDS_API_KEY` Secret）。赛事匹配用开球时间 ±3 小时、联赛、队名别名表，队名别名需要人工审核。
 5. **模型 A 回测**（已写好 `analysis/step1_market.py`，等全量数据跑完后看结论）：用官方数据重跑中间、热门、冷门策略，分别按初赔和终赔两种口径，按赔率区间做校准图，并做 BH 多重检验校正。
 6. **概率链**：国际赔率去水（Shin 或 power 方法）→ 反解 λ → Dixon-Coles 比分矩阵 → 体彩整数让球的 HAD/HHAD 概率。**不要把亚盘直接当作体彩让球**：体彩让球是三项结果、没有走盘。模型可以用 penaltyblog（MIT）。
-7. **每日建议**：先只出单不买，跑 2 周。规则：EV = p × SP − 1 ≥ +5%，并且模型与市场的差 ≤ 0.08 时才正式推荐；没有合格场次时，给出当天 EV 最高的 1–2 个单关作为娱乐选项，写明预期亏损；不推荐 SP > 6 的冷门；单日上限 10 元。建议在开赛前冻结并做哈希，只追加，输了不删。
+7. **每日建议**（已上线 `daily.py` + `settle.py` + `daily-picks.yml`，2026-11-01 起每天自动出单）：先只出单不买，跑 2 周。规则：EV = p × SP − 1 ≥ +5%，并且模型与市场的差 ≤ 0.08 时才正式推荐；没有合格场次时，给出当天 EV 最高的 1–2 个单关作为娱乐选项，写明预期亏损；不推荐 SP > 6 的冷门；单日上限 10 元。建议在开赛前冻结并做哈希，只追加，输了不删。
 8. 最后做网页仪表盘（静态页面，可以放 Cloudflare Pages）。
 
 ## 7. 参考的外部仓库
