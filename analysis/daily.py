@@ -7,7 +7,7 @@
 3. 概率：胜平负用 Pinnacle 去水（Shin）。让球胜平负用泊松比分模型从胜平负概率反推，目前只做「影子」记录，不进推荐。
 4. 选择：
    - 正式推荐：胜平负、EV ≥ 5%、SP ≤ 6、可单关 → 单关；不可单关的 EV ≥ 5% 选项满两个时组 2 串 1。
-   - 娱乐串关：没有正式推荐时，从不同比赛里挑 EV 最高的选项（EV ≥ −8%、SP 1.3–4.0）组 2 串 1 和 3 串 1。
+   - 娱乐串关：没有正式推荐时，从不同比赛里挑 EV 最高的选项（EV ≥ −8%、SP 1.3–4.0）组 2/3/4 串 1。
    - 每注 2 元，单日合计 ≤ 10 元。每条腿给出「底线 SP」：下单时低于它就别买。
 5. 冻结：写 recommendations/YYYY-MM-DD.json 和 .md，附 sha256；同一天已存在则不覆盖。
 只做研究和模拟，不接入投注。
@@ -41,6 +41,7 @@ NAME = {"H": "主胜", "D": "平", "A": "客胜"}
 FORMAL_EV, FORMAL_MAX_SP = 0.05, 6.0
 FUN_MIN_EV, FUN_SP = -0.08, (1.3, 4.0)
 STAKE, DAILY_CAP = 2, 10
+FUN_PARLAYS = (2, 3, 4)  # 用户 2026-10-31 要求：多串几场
 
 
 # ---------- 读快照 ----------
@@ -296,10 +297,9 @@ def choose(legs):
         tickets.append({**ticket("正式·2串1", [multi.iloc[0], multi.iloc[1]], FORMAL_EV), "tier": "formal"})
     if not tickets:
         fun = had[(had["ev"] >= FUN_MIN_EV) & had["sp"].between(*FUN_SP)].drop_duplicates("match_id")
-        if len(fun) >= 2:
-            tickets.append({**ticket("娱乐·2串1", [fun.iloc[0], fun.iloc[1]], FUN_MIN_EV), "tier": "fun"})
-        if len(fun) >= 3:
-            tickets.append({**ticket("娱乐·3串1", [fun.iloc[0], fun.iloc[1], fun.iloc[2]], FUN_MIN_EV), "tier": "fun"})
+        for n in FUN_PARLAYS:
+            if len(fun) >= n:
+                tickets.append({**ticket(f"娱乐·{n}串1", [fun.iloc[i] for i in range(n)], FUN_MIN_EV), "tier": "fun"})
     out, spent = [], 0
     for t in tickets:
         if spent + t["stake"] <= DAILY_CAP:
