@@ -334,7 +334,8 @@ def to_markdown(rec):
         for l in t["legs"]:
             L.append(f"- {l['num']} {l['league']} {l['match']}（{l['kickoff']}）：**{l['pool']} {l['pick']}** SP {l['sp']:.2f}，"
                      f"市场概率 {l['p']:.1%}，期望回报 {l['ev']:+.1%}，**低于 {l['min_sp']:.2f} 就别买**\n")
-        L.append(f"\n合计赔率 {t['odds']:.2f}，中奖可拿 {t['payout']:.2f} 元，中奖概率 {t['p_win']:.1%}，期望回报 {t['ev']:+.1%}。\n\n")
+        pw = f"{t['p_win']:.1%}" if t["p_win"] >= 0.01 else f"约 {1 / t['p_win']:,.0f} 分之一"
+        L.append(f"\n合计赔率 {t['odds']:,.2f}，中奖可拿 {t['payout']:,.2f} 元，中奖概率 {pw}，期望回报 {t['ev']:+.1%}。\n\n")
     if rec["tickets"]:
         L.append(f"今日合计 {total} 元。\n\n")
     legs = pd.DataFrame(rec["legs"])
