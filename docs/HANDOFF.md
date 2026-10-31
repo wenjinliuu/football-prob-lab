@@ -47,7 +47,7 @@ GitHub Actions（本仓库）
 | `cloudbase/jc-collector/scf_bootstrap` | HTTP 函数启动脚本（监听 9000） |
 | `cloudbaserc.json` | 函数配置（type HTTP、Nodejs20.19） |
 | `scripts/collect.mjs` | 调用 `tcb fn invoke` 并把原始响应存为带时间戳的 JSON，**只新增不覆盖**。CLI 输出前后有提示文字，脚本截取第 0 列 `{` 到第 0 列 `}` 之间的 JSON |
-| `scripts/fetch_history.py` | 独立的变赔历史采集脚本（只用 Python 标准库），规则同云函数；供小米平板 Termux 使用（见 `docs/tablet-worker.md`）。原计划的线 2（电子衣橱 Lighthouse，经 `ai-wardrobe-lab` 私有仓库的 SSH Secrets）因私有仓库 Actions 被 GitHub 账单拦截而无法运行，已撤回，该仓库恢复冻结原样；`shard_lighthouse.txt` 改由云开发线用 `history-file:` 任务跑。分工名单 `data/backfill/shard_*.txt`；仓库里出现 `data/backfill/HALT` 时两条线都会停 |
+| `scripts/fetch_history.py` | 独立的变赔历史采集脚本（只用 Python 标准库），规则同云函数；供小米平板 Termux 使用（见 `docs/tablet-worker.md`）。线 2 是电子衣橱的 Lighthouse 服务器：用户把 `ai-wardrobe-lab` 改为公开后，由该仓库的 `sporttery-worker.yml`（仅手动触发）通过 SSH 在服务器 `~/sporttery-worker/` 下运行本脚本，结果存为该仓库的 Actions 附件，再用本仓库 `import-artifacts.yml`（repo=wenjinliuu/ai-wardrobe-lab）转存。衣橱应用代码和容器不动。分工名单 `data/backfill/shard_*.txt`；仓库里出现 `data/backfill/HALT` 时两条线都会停 |
 | `.github/workflows/deploy-cloudbase.yml` | 推送 `cloudbase/**` 或手动触发时部署 |
 | `analysis/load.py` | 把原始 JSON 整理成 DataFrame：`matches()`（每场一行，含 HAD 终赔、比分、让球、HAD/HHAD 赛果）、`odds_history()`（每次变赔一行，seq=0 初赔、is_final 终赔） |
 | `analysis/step1_market.py` | 第 1 步报告：抽水、校准、热门/中间/冷门策略、SP 区间 × 选项 ROI（BH 校正）、初赔 vs 终赔、赔率变动方向 → `reports/step1_market.md` |
