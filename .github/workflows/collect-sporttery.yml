@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       tasks:
-        description: "任务，空格分隔：calc / results:开始:结束 / results-range:开始:结束 / history:id1,id2 / history-pending:场数"
+        description: "任务，空格分隔：calc / results:开始:结束 / results-range:开始:结束 / history:id1,id2 / history-pending:场数 / history-file:名单文件"
         default: "calc"
 
 permissions:

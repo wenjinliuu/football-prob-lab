@@ -1,7 +1,7 @@
 // 通过 CloudBase CLI 调用 jc-collector（HTTP 函数），把原始响应存成带时间戳的 JSON 文件（只新增，不覆盖）。
 // 用法：node scripts/collect.mjs <outDir> [calc] [results:YYYY-MM-DD:YYYY-MM-DD] [results-range:开始:结束] [history:id1,id2,...]
 // results 单次 ≤30 天；results-range 自动切成 30 天一段，用于历史回补。
-// history-pending:N 从仓库已存的赛果里挑出重点联赛中还没有变赔历史的场次（新到旧），拉 N 场，每次调用 5 场。
+// history-file:名单文件 按名单拉（跳过已完成）。history-pending:N 从仓库已存的赛果里挑出重点联赛中还没有变赔历史的场次（新到旧），拉 N 场，每次调用 5 场。
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -80,7 +80,7 @@ function history(ids) {
 const HISTORY_BATCH = 5;
 const FOCUS_LEAGUES = new Set([25, 62, 40, 37, 32, 69, 70, 1033103]);
 const ARCHIVE = 'data/raw/sporttery';
-function pendingHistory(n) {
+function doneHistory() {
   const done = new Set();
   const hdir = path.join(ARCHIVE, 'history');
   if (fs.existsSync(hdir)) {
@@ -90,6 +90,11 @@ function pendingHistory(n) {
       if (good(it) || (it.status === 200 && it.data && it.data.success === false && it.data.errorCode === '')) done.add(Number(it.matchId));
     }
   }
+  return done;
+}
+
+function pendingHistory(n) {
+  const done = doneHistory();
   const matches = new Map();
   const rdir = path.join(ARCHIVE, 'results');
   for (const f of fs.existsSync(rdir) ? fs.readdirSync(rdir) : []) {
@@ -116,6 +121,15 @@ for (const t of tasks) {
     for (const [x, y] of windows(a, b)) { if (halted) break; await results(x, y); }
   } else if (kind === 'history') {
     history((a || '').split(',').filter(Boolean));
+  } else if (kind === 'history-file') {
+    // 按名单文件拉（如 data/backfill/shard_lighthouse.txt），跳过已完成的场次
+    const done = doneHistory();
+    const ids = fs.readFileSync(a, 'utf8').split(/\s+/).filter(Boolean).map(Number).filter((id) => !done.has(id));
+    summary.push(`history-file ${a}: ${ids.length} to fetch`);
+    for (let i = 0; i < ids.length && !halted; i += HISTORY_BATCH) {
+      history(ids.slice(i, i + HISTORY_BATCH));
+      if (i + HISTORY_BATCH < ids.length) await sleep(1500);
+    }
   } else if (kind === 'history-pending') {
     const ids = pendingHistory(Number(a) || 200);
     summary.push(`history-pending: ${ids.length} selected`);
