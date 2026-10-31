@@ -1,5 +1,6 @@
 // 通过 CloudBase CLI 调用 jc-collector（HTTP 函数），把原始响应存成带时间戳的 JSON 文件（只新增，不覆盖）。
-// 用法：node scripts/collect.mjs <outDir> [calc] [results:YYYY-MM-DD:YYYY-MM-DD] [history:id1,id2,...]
+// 用法：node scripts/collect.mjs <outDir> [calc] [results:YYYY-MM-DD:YYYY-MM-DD] [results-range:开始:结束] [history:id1,id2,...]
+// results 单次 ≤30 天；results-range 自动切成 30 天一段，用于历史回补。
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -32,32 +33,54 @@ function save(kind, name, obj) {
 const good = (r) => r && r.status === 200 && r.data && r.data.errorCode === '0';
 const summary = [];
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let halted = false; // 任何请求异常：立即停止整次运行，不重试
+
+// 拉一个日期区间（≤30 天）的全部分页赛果
+async function results(a, b) {
+  let page = 1, pages = 1;
+  do {
+    const { result } = invoke({ action: 'results', begin: a, end: b, pageNo: page });
+    if (!good(result)) { summary.push(`results ${a}..${b} p${page}: status ${result.status}, stopped`); halted = true; return; }
+    pages = Number(result.data.value.pages) || 1;
+    summary.push(`results ${a}..${b} p${page}/${pages}: ${result.data.value.matchResult.length} rows → ${save('results', `${a}_${b}_p${page}`, result)}`);
+    page += 1;
+    await sleep(2000);
+  } while (page <= pages);
+}
+
+// 把长区间切成 30 天一段（含首尾）
+function windows(a, b) {
+  const day = 86400000, out = [];
+  for (let t = Date.parse(a + 'T00:00:00Z'); t <= Date.parse(b + 'T00:00:00Z'); t += 30 * day) {
+    const e = Math.min(t + 29 * day, Date.parse(b + 'T00:00:00Z'));
+    out.push([new Date(t).toISOString().slice(0, 10), new Date(e).toISOString().slice(0, 10)]);
+  }
+  return out;
+}
+
 for (const t of tasks) {
+  if (halted) break;
   const [kind, a, b] = t.split(':');
   if (kind === 'calc') {
     const { result } = invoke({ action: 'calc', pools: 'had,hhad' });
     const n = good(result) ? result.data.value.matchInfoList.flatMap((d) => d.subMatchList).length : 0;
     summary.push(`calc: status ${result.status}, ${n} matches → ${save('calc', 'calc', result)}`);
-    if (!good(result)) process.exitCode = 1;
+    if (!good(result)) halted = true;
   } else if (kind === 'results') {
-    let page = 1, pages = 1;
-    do {
-      const { result } = invoke({ action: 'results', begin: a, end: b, pageNo: page });
-      if (!good(result)) { summary.push(`results ${a}..${b} p${page}: status ${result.status}, stopped`); process.exitCode = 1; break; }
-      pages = Number(result.data.value.pages) || 1;
-      summary.push(`results ${a}..${b} p${page}/${pages}: ${result.data.value.matchResult.length} rows → ${save('results', `${a}_${b}_p${page}`, result)}`);
-      page += 1;
-      if (page <= pages) await new Promise((r) => setTimeout(r, 2000));
-    } while (page <= pages);
+    await results(a, b);
+  } else if (kind === 'results-range') {
+    for (const [x, y] of windows(a, b)) { if (halted) break; await results(x, y); }
   } else if (kind === 'history') {
     const ids = (a || '').split(',').filter(Boolean);
     const { result } = invoke({ action: 'history', matchIds: ids });
     for (const it of result.items || []) save('history', String(it.matchId), it);
     summary.push(`history: ${(result.items || []).length}/${ids.length} fetched${result.stoppedEarly ? ' (stopped early)' : ''}`);
-    if (result.stoppedEarly) process.exitCode = 1;
+    if (result.stoppedEarly) halted = true;
   } else {
     console.error('unknown task ' + t); process.exitCode = 2;
   }
 }
+if (halted) { summary.push('HALTED: 请求异常，已停止后续任务'); process.exitCode = 1; }
 console.log(summary.join('\n'));
 if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, '### 采集结果\n\n```\n' + summary.join('\n') + '\n```\n');
