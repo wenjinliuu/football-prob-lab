@@ -1,0 +1,53 @@
+name: Import sporttery artifacts
+
+# 仓库公开期间，采集结果只作为 Actions 附件保存。
+# 仓库改成 Private 后手动运行一次，把未过期的附件补存到 data/raw/sporttery/（只新增不覆盖）。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: collect-sporttery
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Require private repository
+        run: |
+          PRIVATE=$(gh api "repos/$GITHUB_REPOSITORY" --jq .private)
+          if [ "$PRIVATE" != "true" ]; then
+            echo "::error::仓库仍是公开的，体彩数据不能提交。先把仓库改成 Private 再运行。"
+            exit 1
+          fi
+
+      - name: Download artifacts
+        run: |
+          mkdir -p "$RUNNER_TEMP/zips" "$RUNNER_TEMP/raw"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.expired == false and (.name | startswith("sporttery-raw-"))) | "\(.id) \(.name)"' \
+            > "$RUNNER_TEMP/list.txt"
+          echo "artifacts: $(wc -l < "$RUNNER_TEMP/list.txt")"
+          while read -r ID NAME; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ID/zip" > "$RUNNER_TEMP/zips/$NAME.zip"
+            unzip -n -q "$RUNNER_TEMP/zips/$NAME.zip" -d "$RUNNER_TEMP/raw"
+          done < "$RUNNER_TEMP/list.txt"
+
+      - name: Commit
+        run: |
+          mkdir -p data/raw/sporttery
+          cp -rn "$RUNNER_TEMP/raw/." data/raw/sporttery/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/raw/sporttery
+          git diff --cached --stat
+          git diff --cached --quiet || git commit -m "data: import sporttery raw from artifacts"
+          git pull --rebase -q && git push

@@ -48,12 +48,13 @@ GitHub Actions（本仓库）
 | `cloudbaserc.json` | 函数配置（type HTTP、Nodejs20.19） |
 | `scripts/collect.mjs` | 调用 `tcb fn invoke` 并把原始响应存为带时间戳的 JSON，**只新增不覆盖**。CLI 输出前后有提示文字，脚本截取第 0 列 `{` 到第 0 列 `}` 之间的 JSON |
 | `.github/workflows/deploy-cloudbase.yml` | 推送 `cloudbase/**` 或手动触发时部署 |
+| `.github/workflows/import-artifacts.yml` | 手动触发：仓库私有时把未过期的 `sporttery-raw-*` 附件补存到 `data/raw/sporttery/`（只新增不覆盖）；仓库公开时直接报错退出 |
 | `.github/workflows/collect-sporttery.yml` | 每天 02:17 UTC（北京 10:17）拉当日 `calc` 和前一天 `results`；部署成功后自动跑一次；手动触发时可传 `tasks`，例如 `calc results:2026-10-01:2026-10-07 history:2042385,2042386` |
 
 ### 3.3 验证记录
 
 - 2026-10-31 部署成功；手动采集成功：`calc` 62 场，`results` 2026-10-30 共 7 场。
-- 数据存储：**仓库公开时只上传为 Actions 附件（保留 30 天）**，仓库私有时才提交到 `data/raw/sporttery/`。
+- 数据存储：**仓库公开时只上传为 Actions 附件（保留 90 天）**，仓库私有时才提交到 `data/raw/sporttery/`。用户计划额度恢复后把仓库改为私有，改完手动运行 `import-artifacts.yml`，把公开期间的附件补存进仓库。
 
 ## 4. 体彩接口要点（已实测）
 
@@ -74,7 +75,7 @@ GitHub Actions（本仓库）
 
 ## 6. 下一步（按优先级）
 
-1. **长期存储**：目前只有 30 天附件。方案 A（推荐）：jc-collector 或采集脚本把原始 JSON 写入云开发的云存储或 PostgreSQL（同一环境，私有），仓库保持公开。方案 B：用户修好 GitHub 账单后把仓库改为私有，自动提交存档。
+1. **长期存储**：已定方案 B，用户修好账单后把仓库改为私有，采集自动提交；改私有后运行 `import-artifacts.yml` 补存附件。
 2. **历史回补**：2018 年起，先做五大联赛加欧冠和欧联。赛果接口按 30 天分段分页，再对每场调用 `history`。整个过程低频：每批 20 场、间隔 1.5 秒，分多天跑完，估计约 2 万场。
 3. **规范化**：DuckDB 加 Parquet，表包括 `matches`、`teams/team_aliases`、`sporttery_odds`（每次变赔一行）、`global_odds`、`predictions`（只追加）、`backtests`。详见报告的"数据质量与回测方案"一节。
 4. **国际赔率**：Football-Data.co.uk 的 CSV（有 Pinnacle 收盘价，用于历史；条款仅限个人使用，不要再分发），加上 The Odds API 免费档（每天拉一次 eu 区 1X2 和大小球；需要用户注册并新增 `ODDS_API_KEY` Secret）。赛事匹配用开球时间 ±3 小时、联赛、队名别名表，队名别名需要人工审核。
