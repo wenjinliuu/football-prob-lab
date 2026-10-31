@@ -62,11 +62,17 @@ function windows(a, b) {
 
 
 function history(ids) {
-  let result;
+  let result, raw;
   try {
-    ({ result } = invoke({ action: 'history', matchIds: ids }));
+    raw = invoke({ action: 'history', matchIds: ids });
+    ({ result } = raw);
   } catch (e) {
     summary.push(`history: invoke failed (${String(e.message || e).split('\n').find((l) => l.includes('✖')) || 'error'}), stopped`);
+    halted = true;
+    return;
+  }
+  if (!result || !Array.isArray(result.items)) {
+    summary.push(`history: unexpected response ${JSON.stringify(raw).slice(0, 300)}, stopped`);
     halted = true;
     return;
   }
