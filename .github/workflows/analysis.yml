@@ -2,6 +2,9 @@ name: Analysis reports
 
 # 用仓库里的原始数据重新生成 reports/。采集成功后自动跑，也可手动触发。
 on:
+  push:  # 腾讯云 jc-daily 提交新赛果后更新报告
+    branches: [main]
+    paths: ["data/raw/sporttery/results/**"]
   workflow_run:
     workflows: ["Collect sporttery data"]
     types: [completed]

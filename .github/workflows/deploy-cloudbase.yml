@@ -21,6 +21,8 @@ jobs:
     uses: wenjinliuu/cloudbase-mcp-worker/.github/workflows/cloudbase-deploy.yml@main
     with:
       config-dir: .
-      functions: jc-collector
+      functions: jc-collector jc-daily
     secrets:
       CLOUDBASE_API_KEY: ${{ secrets.CLOUDBASE_API_KEY }}
+      FUNCTION_ENV_1: ${{ secrets.ODDS_API_KEY }}   # jc-daily 的 ODDS_API_KEY
+      FUNCTION_ENV_2: ${{ secrets.GH_DATA_TOKEN }}  # jc-daily 往本仓库提交数据用

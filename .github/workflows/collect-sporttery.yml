@@ -4,7 +4,7 @@ name: Collect sporttery data
 # GitHub 服务器直连体彩接口会被拦截（HTTP 567），所以这里只调用云函数。
 on:
   schedule:
-    - cron: "17 2 * * *"   # 北京时间 10:17：当日在售赔率 + 前一天赛果
+    - cron: "47 4 * * *"   # 北京时间 12:47 兜底：主力是腾讯云 jc-daily（10:17/12:17），当天已有推荐就跳过
   workflow_run:
     workflows: ["Deploy CloudBase functions"]
     types: [completed]
@@ -32,17 +32,26 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v5
+      - name: Skip if today's picks already exist (backup schedule only)
+        if: ${{ github.event_name == 'schedule' }}
+        run: |
+          if [ -f "recommendations/$(TZ=Asia/Shanghai date +%F).md" ]; then
+            echo "今天的推荐已由腾讯云 jc-daily 生成，兜底跳过"; echo "SKIP=1" >> "$GITHUB_ENV"
+          fi
 
       - uses: actions/setup-node@v5
+        if: ${{ env.SKIP != '1' }}
         with:
           node-version: "20"
 
       - name: Install CloudBase CLI and log in
+        if: ${{ env.SKIP != '1' }}
         run: |
           npm install --global @cloudbase/cli@3.8.3
           tcb login --cloudbase-api-key "$CLOUDBASE_API_KEY" -e "$CLOUDBASE_ENV_ID" --yes
 
       - name: Collect
+        if: ${{ env.SKIP != '1' }}
         env:
           INPUT_TASKS: ${{ github.event.inputs.tasks }}
         run: |

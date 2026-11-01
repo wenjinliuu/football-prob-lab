@@ -13,6 +13,31 @@
       "memorySize": 128,
       "installDependency": false,
       "triggers": []
+    },
+    {
+      "name": "jc-daily",
+      "dir": "cloudbase/jc-daily",
+      "handler": "index.main",
+      "runtime": "Nodejs20.19",
+      "timeout": 180,
+      "memorySize": 256,
+      "installDependency": false,
+      "envVariables": {
+        "ODDS_API_KEY": "{{env.FUNCTION_ENV_1}}",
+        "GH_DATA_TOKEN": "{{env.FUNCTION_ENV_2}}"
+      },
+      "triggers": [
+        {
+          "name": "daily",
+          "type": "timer",
+          "config": "0 17 10 * * * *"
+        },
+        {
+          "name": "backup",
+          "type": "timer",
+          "config": "0 17 12 * * * *"
+        }
+      ]
     }
   ]
 }

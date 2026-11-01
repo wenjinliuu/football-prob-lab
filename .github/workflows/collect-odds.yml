@@ -5,7 +5,7 @@ name: Collect international odds
 # 每次 8 点额度，免费档每月 500 点。2026-10-31 用户同意新增此定时任务。
 on:
   schedule:
-    - cron: "17 2 * * *"
+    - cron: "47 4 * * *"   # 北京时间 12:47 兜底，当天已有推荐就跳过
   workflow_dispatch:
 
 permissions:
@@ -20,10 +20,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - name: Skip if today's picks already exist (backup schedule only)
+        if: ${{ github.event_name == 'schedule' }}
+        run: |
+          if [ -f "recommendations/$(TZ=Asia/Shanghai date +%F).md" ]; then
+            echo "今天的推荐已由腾讯云 jc-daily 生成，兜底跳过"; echo "SKIP=1" >> "$GITHUB_ENV"
+          fi
       - uses: actions/setup-node@v5
+        if: ${{ env.SKIP != '1' }}
         with:
           node-version: "20"
       - name: Collect
+        if: ${{ env.SKIP != '1' }}
         env:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
         run: node scripts/odds.mjs "$RUNNER_TEMP/odds"

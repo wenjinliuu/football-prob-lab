@@ -1,10 +1,13 @@
 name: Daily picks
 
-# 采集完成后自动运行（不是新的定时器，跟随两个采集工作流）：
+# 腾讯云 jc-daily 提交数据后、或 GitHub 兜底采集完成后自动运行（不是定时器）：
 # 1. 体彩在售快照和国际赔率快照都在 2 小时内、彼此相差 ≤ 90 分钟时，生成当天推荐并冻结（已存在则跳过）；
 # 2. 用最新赛果更新账本 reports/ledger.md。
 # 只做模拟记录，不接入投注。
 on:
+  push:  # 腾讯云 jc-daily 提交数据后立即触发（推送触发比定时可靠）
+    branches: [main]
+    paths: ["data/raw/odds_api/**"]
   workflow_run:
     workflows: ["Collect international odds", "Collect sporttery data"]
     types: [completed]

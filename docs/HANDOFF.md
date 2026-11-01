@@ -28,15 +28,22 @@
 ### 3.1 架构
 
 ```text
+腾讯云开发 jc-daily（事件函数，定时器 10:17 主 / 12:17 备，北京时间；用户 2026-11-01 提议并同意）
+  ├─ 体彩 calc + 前一天 results（国内直连，低频，遇非 200 即停）
+  ├─ The Odds API h2h（8 个联赛，8 点额度）
+  └─ GitHub Git Data API 一次性提交原始数据（GH_DATA_TOKEN）→ 推送触发 daily-picks / analysis
+     当天 recommendations/YYYY-MM-DD.md 已存在则跳过（备用定时器）
+
 GitHub Actions（本仓库）
-  ├─ deploy-cloudbase.yml ──调用──▶ wenjinliuu/cloudbase-mcp-worker 的可复用工作流 cloudbase-deploy.yml
-  │                                   └─ tcb fn deploy jc-collector → 腾讯云开发
-  └─ collect-sporttery.yml ──tcb fn invoke --api-key──▶ jc-collector（HTTP 云函数，上海，国内出口）──▶ 体彩接口
-                                                            （GitHub 服务器直连体彩会被拦：HTTP 567）
+  ├─ daily-picks.yml：push(data/raw/odds_api/**) 或兜底采集完成后 → 生成推荐 + 结算
+  ├─ collect-sporttery.yml / collect-odds.yml：北京 12:47 兜底定时，当天已有推荐就跳过；也用于手动回补
+  │     collect-sporttery 经 tcb fn invoke --api-key 调 jc-collector（HTTP 云函数）——GitHub 直连体彩会被拦（HTTP 567）
+  └─ deploy-cloudbase.yml ──调用──▶ wenjinliuu/cloudbase-mcp-worker 的可复用工作流，部署 jc-collector、jc-daily
+        jc-daily 的环境变量由 CI 注入：FUNCTION_ENV_1=ODDS_API_KEY，FUNCTION_ENV_2=GH_DATA_TOKEN（都来自 GitHub Secrets）
 ```
 
 - 云开发环境：`wenjin-cloudbase-d1empq882391ac1`（ap-shanghai，个人版）。同一环境里还有用户的彩票 App 后端函数（lottery-*、calenease-*），**不要动它们**。
-- 本仓库 Secret：`CLOUDBASE_API_KEY`（云开发环境级 API Key，用户已配置）。
+- 本仓库 Secrets：`CLOUDBASE_API_KEY`（云开发环境级 API Key）、`ODDS_API_KEY`、`GH_DATA_TOKEN`（fine-grained，只有本仓库 Contents 读写，给 jc-daily 提交数据；部署时注入云函数环境变量）。
 - 仓库现在是 **public**：私有仓库的 Actions 因为 GitHub 账单问题无法启动，用户已改回公开。
 
 ### 3.2 文件
@@ -45,7 +52,8 @@ GitHub Actions（本仓库）
 | --- | --- |
 | `cloudbase/jc-collector/http-index.js` | HTTP 云函数，POST body `{action}`：`calc`（在售 SP）、`results`（按日期区间查赛果，单次 ≤30 天，分页 100）、`history`（按 matchId 查完整变赔，单次最多 20 场，间隔 1.5 秒）。任一请求非 200 立即停止 |
 | `cloudbase/jc-collector/scf_bootstrap` | HTTP 函数启动脚本（监听 9000） |
-| `cloudbaserc.json` | 函数配置（type HTTP、Nodejs20.19） |
+| `cloudbase/jc-daily/index.js` | 定时事件函数：抓体彩在售+昨日赛果、Odds API，经 GitHub Git Data API 一次提交（文件路径与 collect.mjs/odds.mjs 一致）。当天推荐已存在则跳过 |
+| `cloudbaserc.json` | 函数配置：jc-collector（HTTP）、jc-daily（事件函数 + 两个 timer 触发器，envVariables 用 `{{env.FUNCTION_ENV_1/2}}`） |
 | `scripts/collect.mjs` | 调用 `tcb fn invoke` 并把原始响应存为带时间戳的 JSON，**只新增不覆盖**。CLI 输出前后有提示文字，脚本截取第 0 列 `{` 到第 0 列 `}` 之间的 JSON |
 | `scripts/fetch_history.py` | 独立的变赔历史采集脚本（只用 Python 标准库），规则同云函数；供小米平板 Termux 使用（见 `docs/tablet-worker.md`）。线 2 是电子衣橱的 Lighthouse 服务器：用户把 `ai-wardrobe-lab` 改为公开后，由该仓库的 `sporttery-worker.yml`（仅手动触发）通过 SSH 在服务器 `~/sporttery-worker/` 下运行本脚本，结果存为该仓库的 Actions 附件，再用本仓库 `import-artifacts.yml`（repo=wenjinliuu/ai-wardrobe-lab）转存。衣橱应用代码和容器不动。分工名单 `data/backfill/shard_*.txt`；仓库里出现 `data/backfill/HALT` 时两条线都会停 |
 | `.github/workflows/deploy-cloudbase.yml` | 推送 `cloudbase/**` 或手动触发时部署 |
