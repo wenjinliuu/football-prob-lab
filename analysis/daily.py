@@ -46,6 +46,7 @@ FUN_MIN_EV, FUN_SP = -0.08, (1.5, 3.0)
 # 6/8 串 1 用中高赔的腿拉大奖金（用户 2026-10-31 要求）：SP 2.2–4.0，同样按 EV 从高到低取。
 BIG_PARLAY_MIN_N, BIG_SP = 6, (2.2, 4.0)
 STAKE, DAILY_CAP = 2, 10
+MIN_FOCUS = 6  # 首版在售重点联赛少于这个数时，允许当天再出一份补充版
 FUN_PARLAYS = (2, 3, 4, 6, 8)  # 竞彩胜平负/让球最多 8 串 1；用户 2026-10-31 要求
 FUN_PRIORITY = (8, 6, 4, 3, 2)  # 预算不够时先保留大串（用户想要偶尔中个大的）
 
@@ -322,7 +323,7 @@ def choose(legs):
 
 
 def to_markdown(rec):
-    L = [f"# 每日推荐 {rec['date']}\n\n",
+    L = [f"# 每日推荐 {rec['date']}" + ("（补充版：首版时体彩开售场次太少）" if rec.get("supplement_of") else "") + "\n\n",
          f"> 生成于 {rec['generated_at']}。体彩快照 {rec['inputs']['sporttery_fetched_at']}，国际赔率快照 {rec['inputs']['odds_fetched_at']}"
          f"（相差 {rec['inputs']['gap_minutes']} 分钟）。重点联赛在售 {rec['coverage']['selling_focus']} 场，匹配上 {rec['coverage']['matched']} 场。\n"
          "> 只做研究和模拟记录，不构成投注建议。sha256 见同名 .sha256 文件。\n\n"]
@@ -356,8 +357,18 @@ def main():
     OUT.mkdir(exist_ok=True)
     jf, mf, hf = (OUT / f"{rec['date']}{ext}" for ext in (".json", ".md", ".sha256"))
     if jf.exists() and "--force-print" not in sys.argv:
-        print(f"{jf.name} 已存在，不覆盖（推荐一旦生成即冻结）")
-        return
+        # 已有推荐一律冻结、不覆盖。若当时在售的重点联赛太少（体彩上午还没开售），
+        # 且现在场次更多，就另出一份「补充版」YYYY-MM-DD-2（每天最多一份）。用户 2026-11-05 要求。
+        first = json.loads(jf.read_text())
+        n0, n1 = first["coverage"]["selling_focus"], rec["coverage"]["selling_focus"]
+        jf2 = OUT / f"{rec['date']}-2.json"
+        if n0 >= MIN_FOCUS or jf2.exists() or n1 <= n0:
+            print(f"{jf.name} 已存在，不覆盖（推荐一旦生成即冻结；首版在售 {n0} 场，现在 {n1} 场）")
+            return
+        print(f"首版只有 {n0} 场在售，现在 {n1} 场，生成补充版")
+        rec["date"] = f"{rec['date']}-2"
+        rec["supplement_of"] = jf.name
+        jf, mf, hf = (OUT / f"{rec['date']}{ext}" for ext in (".json", ".md", ".sha256"))
     age = (datetime.now(timezone.utc) - pd.Timestamp(rec["inputs"]["odds_fetched_at"])).total_seconds() / 60
     if age > 120 and "--force-print" not in sys.argv:
         print(f"国际赔率快照已是 {age:.0f} 分钟前的，价格可能过期，不生成推荐")

@@ -3,7 +3,7 @@
 // 2. 国际赔率：The Odds API（h2h，eu 区，五大联赛 + 欧冠/欧罗巴/欧协联），每次 8 点额度。
 // 3. 把原始响应一次性提交到 GitHub 仓库（只新增文件，路径与 scripts/collect.mjs、scripts/odds.mjs 一致），
 //    提交会触发 GitHub 上的 daily-picks 生成推荐。
-// 若当天推荐已经存在（主定时器已成功），备用定时器直接跳过。
+// 若当天推荐已经存在，跳过；例外：首版在售重点联赛 < 6 场时，备用定时器（12:17）重新采集一次，供生成补充版。
 // 环境变量：ODDS_API_KEY、GH_DATA_TOKEN（由 CI 从 GitHub Secrets 注入，不写入代码和日志）。
 const REPO = 'wenjinliuu/football-prob-lab';
 const SPORTTERY = 'https://webapi.sporttery.cn/gateway';
@@ -87,10 +87,17 @@ exports.main = async (event) => {
     console.log('缺少 GH_DATA_TOKEN 或 ODDS_API_KEY，跳过');
     return { skipped: 'missing secrets' };
   }
-  const exists = await gh('GET', `/contents/recommendations/${today}.md`);
+  // 当天推荐已存在就跳过；但备用定时器发现首版在售重点联赛 < 6 场（体彩上午还没开售）且还没有补充版时，重新抓一次。
+  const exists = await gh('GET', `/contents/recommendations/${today}.json`);
   if (exists.status === 200) {
-    console.log(`${today} 的推荐已存在（${trigger}），跳过`);
-    return { skipped: 'already done' };
+    let n = 99;
+    try { n = JSON.parse(Buffer.from(exists.json.content, 'base64').toString('utf8')).coverage.selling_focus; } catch (_) { /* 读不到就按已完成处理 */ }
+    const supp = await gh('GET', `/contents/recommendations/${today}-2.json`);
+    if (trigger !== 'backup' || n >= 6 || supp.status === 200) {
+      console.log(`${today} 的推荐已存在（首版在售 ${n} 场，${trigger}），跳过`);
+      return { skipped: 'already done' };
+    }
+    console.log(`首版只有 ${n} 场在售，备用定时器重新采集`);
   }
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
