@@ -276,7 +276,7 @@ def build(now=None, write_alias=True):
         "coverage": {"selling_focus": int(st["league_id"].isin(SPORT).sum()), "matched": int(len(m)),
                      "unmatched": st[st["league_id"].isin(SPORT) & ~st["match_id"].isin(m["match_id"])][["num", "league", "home", "away"]].to_dict("records")},
         "tickets": tickets,
-        "legs": legs.round(4).to_dict("records") if len(legs) else [],
+        "legs": legs.round(4).astype(object).where(legs.round(4).notna(), None).to_dict("records") if len(legs) else [],
     }
 
 
@@ -377,7 +377,7 @@ def main():
         print(f"两份快照相差 {rec['inputs']['gap_minutes']} 分钟，不生成正式推荐")
         if "--force-print" not in sys.argv:
             return
-    body = json.dumps(rec, ensure_ascii=False, indent=1, default=str)
+    body = json.dumps(rec, ensure_ascii=False, indent=1, default=str, allow_nan=False)  # 标准 JSON，云函数（JS）也要读
     if "--force-print" in sys.argv:
         print(to_markdown(rec))
         return

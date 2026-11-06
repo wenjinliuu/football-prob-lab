@@ -91,7 +91,9 @@ exports.main = async (event) => {
   const exists = await gh('GET', `/contents/recommendations/${today}.json`);
   if (exists.status === 200) {
     let n = 99;
-    try { n = JSON.parse(Buffer.from(exists.json.content, 'base64').toString('utf8')).coverage.selling_focus; } catch (_) { /* 读不到就按已完成处理 */ }
+    const text = Buffer.from(exists.json.content || '', 'base64').toString('utf8');
+    const m = text.match(/"selling_focus":\s*(\d+)/);  // 用文本匹配：早期文件里有 NaN，不是标准 JSON
+    if (m) n = Number(m[1]);
     const supp = await gh('GET', `/contents/recommendations/${today}-2.json`);
     if (trigger !== 'backup' || n >= 6 || supp.status === 200) {
       console.log(`${today} 的推荐已存在（首版在售 ${n} 场，${trigger}），跳过`);
