@@ -1,0 +1,18 @@
+{
+ "date": "2026-11-10",
+ "generated_at": "2026-11-10T02:17:43+00:00",
+ "inputs": {
+  "sporttery_calc": "calc__2026-11-10T02-17-04-472Z.json",
+  "sporttery_fetched_at": "2026-11-10 02:17:04.472000+00:00",
+  "odds_api_stamp": "2026-11-10T02-17-04-472Z.json",
+  "odds_fetched_at": "2026-11-10 02:17:15.889000+00:00",
+  "gap_minutes": 0.2
+ },
+ "coverage": {
+  "selling_focus": 0,
+  "matched": 0,
+  "unmatched": []
+ },
+ "tickets": [],
+ "legs": []
+}
